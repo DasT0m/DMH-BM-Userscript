@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay TESTER
 // @namespace https://www.battlemetrics.com/
-// @version 1
-// @updateURL
-// @downloadURL
+// @version 1.1
+// @updateURL https://github.com/DasT0m/DMH-BM-Userscript/edit/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js#L1
+// @downloadURL https://github.com/DasT0m/DMH-BM-Userscript/edit/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js#L1
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players.
 // @author Cephomet
 // @match https://www.battlemetrics.com/*
@@ -14,7 +14,7 @@
 // @connect communitybanlist.com
 // @run-at document-end
 // ==/UserScript==
-const version = "1";
+const version = "1.1";
 const updateRate = "150";
 const colors = {
     cTeamBluefor: "#4eacff",
@@ -113,7 +113,7 @@ async function runCode() {
         }, {
             id: "version",
             label: version,
-            url: "https://raw.githubusercontent.com/TempusOwl/bm-userscript/main/bm-toolkit-desktop.min.js",
+            url: "https://github.com/DasT0m/DMH-BM-Userscript/edit/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js#L1",
             backgroundColor: "black",
             fontSize: "6pt"
         }];
