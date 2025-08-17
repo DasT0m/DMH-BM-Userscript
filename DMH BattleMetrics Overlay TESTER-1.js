@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay TESTER
 // @namespace https://www.battlemetrics.com/
-// @version 1.4
+// @version 1.5
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players.
@@ -14,7 +14,7 @@
 // @connect communitybanlist.com
 // @run-at document-end
 // ==/UserScript==
-const version = "1.4";
+const version = "1.5";
 const updateRate = "150";
 const colors = {
     cTeamBluefor: "#4eacff",
@@ -46,7 +46,7 @@ const sets = {
     leftServer: new Set(["left the server"]),
     joinedServer: new Set(["joined the server"]),
     actionList: new Set(["was warned", "was kicked", "was banned", "edited BattleMetrics Ban", "added BattleMetrics Ban", "deleted BattleMetrics Ban", "Trigger added flag Previously banned"]),
-    adminList: new Set(["DasT0m","Relish","ArmyRat60","W4MP1DUDL3"]),
+    adminList: new Set(["DasT0m","Relish","ArmyRat60","W4MP1DUDL3","X-Ray","Del"]),
     teamBluefor: new Set(["Australian Defence Force", "British Armed Forces", "Canadian Armed Forces", "United States Army", "United States Marine Corps", "Turkish Land Forces"]),
     teamOpfor: new Set(["Russian Ground Forces", "Middle Eastern Alliance", "Middle Eastern Insurgents", "Insurgent Forces", "Irregular Militia Forces", "People's Liberation Army", "Russian Airborne Forces", "PLA Navy Marine Corps", "PLA Amphibious Ground Forces", "Western Private Military Contractors"]),
     teamIndepend: new Set(["Western Private Military Contractors"]),
@@ -179,7 +179,7 @@ async function runCode() {
                 function adminApplyColor(elements, phrases, color) {
                     elements.forEach(function(el) {
                         phrases.forEach(function(phrase) {
-                            const regex = new RegExp("(\\b" + phrase + "\\b)|(\\b『LiQ』 ?" + phrase + "\\b)", "i");
+                            const regex = new RegExp("(\\b" + phrase + "\\b)|(\\b『DMH』 ?" + phrase + "\\b)", "i");
                             if (regex.test(el.textContent)) {
                                 el.style.color = color
                             }
