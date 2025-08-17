@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay TESTER
 // @namespace https://www.battlemetrics.com/
-// @version 1.3
+// @version 1.4
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players.
@@ -14,7 +14,7 @@
 // @connect communitybanlist.com
 // @run-at document-end
 // ==/UserScript==
-const version = "1.3";
+const version = "1.4";
 const updateRate = "150";
 const colors = {
     cTeamBluefor: "#4eacff",
