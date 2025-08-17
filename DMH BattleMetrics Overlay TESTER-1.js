@@ -46,7 +46,7 @@ const sets = {
     leftServer: new Set(["left the server"]),
     joinedServer: new Set(["joined the server"]),
     actionList: new Set(["was warned", "was kicked", "was banned", "edited BattleMetrics Ban", "added BattleMetrics Ban", "deleted BattleMetrics Ban", "Trigger added flag Previously banned"]),
-    adminList: new Set(["DasT0m","Relish","ArmyRat60"]),
+    adminList: new Set(["DasT0m","Relish","ArmyRat60","W4MP1DUDL3"]),
     teamBluefor: new Set(["Australian Defence Force", "British Armed Forces", "Canadian Armed Forces", "United States Army", "United States Marine Corps", "Turkish Land Forces"]),
     teamOpfor: new Set(["Russian Ground Forces", "Middle Eastern Alliance", "Middle Eastern Insurgents", "Insurgent Forces", "Irregular Militia Forces", "People's Liberation Army", "Russian Airborne Forces", "PLA Navy Marine Corps", "PLA Amphibious Ground Forces", "Western Private Military Contractors"]),
     teamIndepend: new Set(["Western Private Military Contractors"]),
