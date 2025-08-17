@@ -1,0 +1,30 @@
+{
+  "colors": {
+    "teamBluefor": "#4eacff",
+    "teamOpfor": "#d0b1ff",
+    "teamIndepend": "#fd6aff",
+    "adminName": "#00fff7",
+    "bmAdmin": "#58ff47",
+    "modAction": "#ff3333",
+    "adminAction": "#37ff00",
+    "teamKilled": "#ffcc00",
+    "leftServer": "#d9a6a6",
+    "joined": "#919191",
+    "grayed": "#919191",
+    "tracked": "#FF931A",
+    "noteIcon": "#f5ccff"
+  },
+  "rules": [
+    { "name": "adminActions", "selector": ".css-ym7lu8", "phrases": ["requested the next map.", "(Global)", "changed the map to"], "colorKey": "adminAction", "caseInsensitive": true },
+    { "name": "grayed", "selector": ".css-ym7lu8", "phrases": ["AFK - Thanks for playing!", "Final warning: Get Squad Leader kit within 5m"], "colorKey": "grayed", "caseInsensitive": true },
+    { "name": "joined", "selector": ".css-ym7lu8", "phrases": ["joined the server"], "colorKey": "joined", "caseInsensitive": true },
+    { "name": "left", "selector": ".css-ym7lu8", "phrases": ["left the server"], "colorKey": "leftServer", "caseInsensitive": true },
+    { "name": "modAction", "selector": ".css-ym7lu8", "phrases": ["was warned", "was kicked", "was banned"], "colorKey": "modAction", "caseInsensitive": true },
+    { "name": "bluefor", "selector": ".css-ym7lu8", "phrases": ["United States Army", "British Armed Forces"], "colorKey": "teamBluefor", "caseInsensitive": false },
+    { "name": "opfor", "selector": ".css-ym7lu8", "phrases": ["Russian Ground Forces", "Insurgent Forces"], "colorKey": "teamOpfor", "caseInsensitive": false },
+    { "name": "independ", "selector": ".css-ym7lu8", "phrases": ["Western Private Military Contractors"], "colorKey": "teamIndepend", "caseInsensitive": false },
+    { "name": "teamkill", "selector": ".css-ym7lu8", "phrases": ["team killed"], "colorKey": "teamKilled", "caseInsensitive": true },
+    { "name": "tracked", "selector": ".css-ym7lu8", "phrases": ["[SL Kit]"], "colorKey": "tracked", "caseInsensitive": true }
+  ],
+  "updatedAt": "2025-08-17T00:00:00Z"
+}
