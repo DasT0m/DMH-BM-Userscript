@@ -2,8 +2,8 @@
 // @name DMH BattleMetrics Overlay TESTER
 // @namespace https://www.battlemetrics.com/
 // @version 1.2
-// @updateURL https://github.com/DasT0m/DMH-BM-Userscript/edit/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js#L1
-// @downloadURL https://github.com/DasT0m/DMH-BM-Userscript/edit/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js#L1
+// @updateURL https://github.com/DasT0m/DMH-BM-Userscript/blob/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
+// @downloadURL https://github.com/DasT0m/DMH-BM-Userscript/blob/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players.
 // @author Cephomet
 // @match https://www.battlemetrics.com/*
@@ -113,7 +113,7 @@ async function runCode() {
         }, {
             id: "version",
             label: version,
-            url: "https://github.com/DasT0m/DMH-BM-Userscript/edit/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js#L1",
+            url: "https://github.com/DasT0m/DMH-BM-Userscript/blob/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js",
             backgroundColor: "black",
             fontSize: "6pt"
         }];
