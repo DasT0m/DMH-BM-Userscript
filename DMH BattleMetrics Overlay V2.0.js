@@ -1,6 +1,6 @@
-// File: DMH Overlay Final V2.js
+// File: DMH Overlay Final.js
 // ==UserScript==
-// @name DMH BattleMetrics Overlay V2.0
+// @name DMH BattleMetrics Overlay
 // @namespace https://www.battlemetrics.com/
 // @version 2.3
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20V2.0.js
