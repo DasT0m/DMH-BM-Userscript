@@ -1,8 +1,0 @@
-{
-  "servers": [
-    { "id": "1", "name": "Server 1", "url": "https://www.battlemetrics.com/rcon/servers/27157414" },
-    { "id": "2", "name": "Server 2", "url": "https://www.battlemetrics.com/rcon/servers/29621932" },
-    { "id": "3", "name": "Server 3", "url": "https://www.battlemetrics.com/rcon/servers/31654281" }
-  ],
-  "updatedAt": "2025-08-17T00:00:00Z"
-}
