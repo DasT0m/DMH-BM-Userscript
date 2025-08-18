@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay
 // @namespace https://www.battlemetrics.com/
-// @version 2.3
+// @version 2.4
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players.
@@ -20,7 +20,7 @@
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "2.3",
+  version: "2.4",
   updateRate: 150,
 
   // Server configurations
