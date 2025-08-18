@@ -1,4 +1,4 @@
-// File: DMH BattleMetrics Overlay TESTER.user.js
+// File: DMH Overlay Final V2.js
 // ==UserScript==
 // @name DMH BattleMetrics Overlay V2.0
 // @namespace https://www.battlemetrics.com/
