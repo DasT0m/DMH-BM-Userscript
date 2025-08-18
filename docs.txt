@@ -1,4 +1,0 @@
-SOP = https://docs.google.com/document/d/abc123/pub
-MSG = https://docs.google.com/spreadsheets/d/def456/edit#gid=0
-RUL = https://docs.google.com/document/d/ghi789/pub
-ADM = https://docs.google.com/document/d/jkl1011/pub
