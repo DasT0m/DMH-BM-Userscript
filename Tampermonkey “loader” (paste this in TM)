@@ -1,0 +1,78 @@
+// ==UserScript==
+// @name         DMH BM SCRIPT — Loader
+// @namespace    DMH
+// @version      1.0.0
+// @description  Loads latest DMH BM overlay code from GitHub and runs it (with offline cache).
+// @match        https://www.battlemetrics.com/*
+// @match        https://www.battlemetrics.com
+// @updateURL    https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/main/DMH%20BM%20LOADER.user.js
+// @downloadURL  https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/main/DMH%20BM%20LOADER.user.js
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @connect      raw.githubusercontent.com
+// @connect      communitybanlist.com
+// @run-at       document-end
+// ==/UserScript==
+
+(function () {
+  "use strict";
+
+  // Where the main script lives (raw file, no userscript header)
+  const REMOTE_MAIN_URL = "https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/main/DMH%20BM%20SCRIPT.main.js";
+
+  // Cache keys + policy
+  const CACHE_KEY = "dmh_remote_main_code";
+  const CACHE_TIME_KEY = "dmh_remote_main_code_time";
+  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes (you can raise this if you want)
+
+  function run(code) {
+    try {
+      // eslint-disable-next-line no-eval
+      eval(code);
+    } catch (e) {
+      console.error("[DMH Loader] Failed to eval main script:", e);
+    }
+  }
+
+  function tryCacheThenFetch() {
+    const cached = GM_getValue(CACHE_KEY, "");
+    const cachedAt = GM_getValue(CACHE_TIME_KEY, 0);
+    const fresh = Date.now() - cachedAt < CACHE_TTL_MS;
+
+    if (cached && fresh) {
+      console.log("[DMH Loader] Using cached main script");
+      run(cached);
+      // Also fetch in background to refresh cache for next time
+      fetchAndCache(true);
+    } else {
+      // Fetch now; if it fails and we had a cache, run the cache
+      fetchAndCache(false, cached);
+    }
+  }
+
+  function fetchAndCache(background = false, fallback = "") {
+    GM_xmlhttpRequest({
+      method: "GET",
+      url: REMOTE_MAIN_URL + "?_ts=" + Date.now(), // bust intermediates
+      headers: { "Cache-Control": "no-cache" },
+      onload: (r) => {
+        if (r.status === 200 && r.responseText) {
+          console.log("[DMH Loader] Fetched latest main script");
+          GM_setValue(CACHE_KEY, r.responseText);
+          GM_setValue(CACHE_TIME_KEY, Date.now());
+          if (!background) run(r.responseText);
+        } else {
+          console.warn("[DMH Loader] HTTP", r.status, "— using fallback cache if present");
+          if (!background && fallback) run(fallback);
+        }
+      },
+      onerror: () => {
+        console.warn("[DMH Loader] Fetch error — using fallback cache if present");
+        if (!background && fallback) run(fallback);
+      }
+    });
+  }
+
+  tryCacheThenFetch();
+})();
