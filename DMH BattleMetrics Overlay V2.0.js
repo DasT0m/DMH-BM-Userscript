@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay V2.0
 // @namespace https://www.battlemetrics.com/
-// @version 2.0
+// @version 2.1
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20Overlay%20Final%20V2.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20Overlay%20Final%20V2.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players.
@@ -20,7 +20,7 @@
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "2.0",
+  version: "2.1",
   updateRate: 150,
 
   // Server configurations
@@ -515,7 +515,7 @@ const CBLManager = {
       this.displayUserData(userData);
     } catch (error) {
       console.error("Error fetching Steam user data:", error);
-      this.displayUserData({ riskRating: "Error", activeBans: "?", expiredBans: "?" });
+      this.displayUserData({ riskRating: "Has no CBL History", activeBans: "N/A", expiredBans: "N/A" });
     } finally {
       this.isFetching = false;
     }
