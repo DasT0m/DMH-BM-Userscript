@@ -2,9 +2,9 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay TESTER
 // @namespace https://www.battlemetrics.com/
-// @version 1.5
-// @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
-// @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js
+// @version 2.0
+// @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20Overlay%20Final%20V2.js
+// @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20Overlay%20Final%20V2.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players.
 // @author Dast0m & Relish
 // @match https://www.battlemetrics.com/*
@@ -20,7 +20,7 @@
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "1.5",
+  version: "2.0",
   updateRate: 150,
 
   // Server configurations
@@ -232,7 +232,7 @@ const UIComponents = {
     versionButton.style.setProperty('--btn-color', '#1a1a1a');
     versionButton.addEventListener('click', () => {
       this.animateClick(versionButton);
-      window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20TESTER-1.js", "_blank");
+      window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20Overlay%20Final%20V2.js", "_blank");
     });
     buttonContainer.appendChild(versionButton);
   },
