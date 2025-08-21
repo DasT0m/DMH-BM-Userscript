@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay - Enhanced
 // @namespace https://www.battlemetrics.com/
-// @version 2.9
+// @version 3.0
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
@@ -20,7 +20,7 @@
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "2.9",
+  version: "3.0",
   updateRate: 150,
 
   servers: [
@@ -221,7 +221,7 @@ const StyleManager = {
 // ========================================
 const UIComponents = {
   createCornerButtons(){
-    const wrap=Object.assign(document.createElement("div"),{className:"bm-button-container",style:"position:absolute;top:15px;right:6%;z-index:99999;display:flex;gap:8px;align-items:center;"});
+    const wrap=Object.assign(document.createElement("div"),{className:"bm-button-container",style:"position:absolute;top:105px;right:1%;z-index:99999;display:flex;gap:8px;align-items:center;"});
     document.body.appendChild(wrap); this.addCornerButtonStyles();
 
     CONFIG.servers.forEach(s=>{
@@ -237,7 +237,7 @@ const UIComponents = {
     v.id="version"; v.className="bm-corner-btn bm-version-btn"; v.setAttribute('data-tooltip','Script Version');
     v.innerHTML=`<span class="version-icon">⚡</span><span class="btn-text">${CONFIG.version}</span>`;
     v.style.setProperty('--btn-color','#1a1a1a');
-    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js","_blank");});
+    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay.js","_blank");});
     wrap.appendChild(v);
   },
   getButtonIcon(label){ const icons={'SOP':'📋','MSG':'💬','Rules':'📖'}; return `<span class="btn-icon">${icons[label]||'🎲'}</span>`; },
@@ -334,7 +334,7 @@ const CBLManager = {
 const AdminBadgeDecorator = {
   PURPLE_RGB: "rgb(208, 58, 250)", // from your screenshot
   SHIELD_HTML: ' <span class="dmh-admin-shield" title="DMH Admin">🛡️</span>',
-
+  
   // NEW: Cache for admin status
   adminCache: new Map(), // steamID -> boolean
   adminElements: new WeakSet(), // track which elements we've decorated
@@ -367,15 +367,15 @@ const AdminBadgeDecorator = {
   // Apply cyan highlight + shield, overriding prior color (e.g., CBL)
   decorateName(nameEl){
     if (!nameEl) return;
-
+    
     // Avoid duplicate shields
     if (!nameEl.querySelector('.dmh-admin-shield')) {
       nameEl.insertAdjacentHTML('beforeend', this.SHIELD_HTML);
     }
-
+    
     // Mark as decorated to avoid re-processing
     this.adminElements.add(nameEl);
-
+    
     // Cyan highlight (match your scheme)
     const imp=(el,p,v)=>el.style.setProperty(p,v,'important');
     imp(nameEl,'color',COLORS.adminCyan);
@@ -394,27 +394,27 @@ const AdminBadgeDecorator = {
   // NEW: Check cache first, then detect and cache result
   isAdminCached(steamID, row) {
     if (!steamID) return false;
-
+    
     // Check cache first
     if (this.adminCache.has(steamID)) {
       return this.adminCache.get(steamID);
     }
-
+    
     // Not in cache, detect and store
     const isAdmin = this.hasAdminFlame(row);
     this.adminCache.set(steamID, isAdmin);
-
+    
     if (isAdmin) {
       console.log(`Cached admin status for ${steamID}`);
     }
-
+    
     return isAdmin;
   },
 
   // NEW: Apply decoration from cache (fast path)
   applyFromCache(nameEl, steamID) {
     if (!nameEl || !steamID) return false;
-
+    
     const isAdmin = this.adminCache.get(steamID);
     if (isAdmin === true && !this.adminElements.has(nameEl)) {
       this.decorateName(nameEl);
@@ -426,15 +426,15 @@ const AdminBadgeDecorator = {
   // Updated main method with caching
   maybeDecorate(row, nameEl, steamID = null){
     if (!row || !nameEl) return;
-
+    
     // If we already decorated this element, skip
     if (this.adminElements.has(nameEl)) return;
-
+    
     // Try cache first if we have steamID
     if (steamID && this.applyFromCache(nameEl, steamID)) {
       return;
     }
-
+    
     // Check if admin and cache the result
     if (steamID) {
       const isAdmin = this.isAdminCached(steamID, row);
@@ -464,6 +464,7 @@ const CBLPlayerListManager = {
   processedPlayers:new Set(),
   cblCache:new Map(),
   coloredElements:new WeakSet(),
+  processedSteamIDs:new Set(), // NEW: Track which steamIDs we've processed
   isProcessing:false,
   lastProcessTime:0,
   listObserver:null,
@@ -529,16 +530,23 @@ const CBLPlayerListManager = {
         const steamID=this.extractSteamID(row);
         const nameEl=this.extractNameElement(row);
         if(!nameEl) return;
-
-        // Reapply CBL if cached
-        const cached=steamID?this.cblCache.get(steamID):null;
-        if(cached){
-          this.applyPlayerNameColor(nameEl,cached);
+        
+        // NEW: Always reapply styling for cached data (force refresh)
+        if(steamID){
+          const cached=this.cblCache.get(steamID);
+          if(cached){
+            this.applyPlayerNameColor(nameEl,cached);
+          }
+          
+          // Always check admin status from cache
+          AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
+        } else {
+          // Fallback admin check without steamID
+          AdminBadgeDecorator.maybeDecorate(row, nameEl);
         }
-
-        // NEW: Use cached admin status for instant decoration
-        AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
-
+        
+        // NEW: Don't rely on coloredElements tracking for fastRescan
+        // Always mark as processed after applying styles
         this.coloredElements.add(nameEl);
         applied++;
       });
@@ -554,6 +562,21 @@ const CBLPlayerListManager = {
       const steamID=this.extractSteamID(row);
       const nameEl=this.extractNameElement(row);
       if(!nameEl) return false;
+      
+      // NEW: Check if we've already processed this steamID and the element hasn't been colored
+      // This handles cases where DOM elements are recreated but we have cached data
+      if(steamID && this.processedSteamIDs.has(steamID) && !this.coloredElements.has(nameEl)){
+        // Apply cached data immediately
+        const cached=this.cblCache.get(steamID);
+        if(cached){
+          this.applyPlayerNameColor(nameEl,cached);
+        }
+        AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
+        this.coloredElements.add(nameEl);
+        return true;
+      }
+      
+      // Skip if already colored (existing logic)
       if(this.coloredElements.has(nameEl)) {
         // Even if previously colored, ensure admin badge shows if present (from cache)
         AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
@@ -568,9 +591,11 @@ const CBLPlayerListManager = {
           this.cblCache.set(steamID,cblData);
         }
         this.applyPlayerNameColor(nameEl,cblData);
+        // NEW: Track that we've processed this steamID
+        this.processedSteamIDs.add(steamID);
       }
 
-      // NEW: Admin badge decoration with caching (pass steamID for cache lookup)
+      // Admin badge decoration with caching (pass steamID for cache lookup)
       AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
 
       this.coloredElements.add(nameEl);
@@ -664,6 +689,7 @@ const CBLPlayerListManager = {
   softReset(){
     this.isProcessing = false;
     this.lastProcessTime = 0;
+    // NEW: Don't clear processedSteamIDs on soft reset to maintain cache benefits
     if(this.listObserver){
       this.listObserver.disconnect();
       this.listObserver = null;
@@ -676,11 +702,12 @@ const CBLPlayerListManager = {
     this.isProcessing=false;
     this.lastProcessTime=0;
     this.coloredElements=new WeakSet();
+    this.processedSteamIDs.clear(); // NEW: Clear steamID tracking
     this.cblCache.clear();
-
-    // NEW: Also clear admin cache on reset
+    
+    // Also clear admin cache on reset
     AdminBadgeDecorator.clearCache();
-
+    
     if(this.listObserver){
       this.listObserver.disconnect();
       this.listObserver=null;
