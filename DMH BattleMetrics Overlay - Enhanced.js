@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay - Enhanced
 // @namespace https://www.battlemetrics.com/
-// @version 3.0
+// @version 3.1
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
@@ -20,7 +20,7 @@
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "3.0",
+  version: "3.1",
   updateRate: 150,
 
   servers: [
@@ -79,6 +79,9 @@ const TEXT_PATTERNS = {
   automatedMessages: new Set([
     "Welcome","Seeding Reward:","Discord Username:","Discord.gg/DMH",
     ") by Trigger","was warned (Discord.gg/DMH)"
+  ]),
+  adminWarningMessages: new Set([
+    "Remote admin has warned player"
   ]),
   trackedTriggers: new Set(["[SL Kit]"]),
   leftServer: new Set(["left the server"]),
@@ -731,6 +734,7 @@ const LogProcessor = {
   applyLogColoring(){
     const map=[
       {selector:SELECTORS.messageLog,patterns:TEXT_PATTERNS.automatedMessages,color:COLORS.automatedMessage},
+      {selector:SELECTORS.messageLog,patterns:TEXT_PATTERNS.adminWarningMessages,color:COLORS.automatedMessage},
       {selector:SELECTORS.messageLog,patterns:TEXT_PATTERNS.adminTerms,color:COLORS.adminAction},
       {selector:SELECTORS.messageLog,patterns:TEXT_PATTERNS.grayedOut,color:COLORS.grayed},
       {selector:SELECTORS.messageLog,patterns:TEXT_PATTERNS.joinedServer,color:COLORS.joined},
