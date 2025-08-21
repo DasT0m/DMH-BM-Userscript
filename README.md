@@ -14,7 +14,34 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
 
 ---
 
-## 📦 Step 1: Install Tampermonkey
+## 📦 Step 1: Enable Developer Mode (If Required)
+
+Some browsers may require enabling developer mode for userscripts to function properly.
+
+### Chrome/Chromium:
+1. Open **Chrome Settings** (three dots menu → Settings)
+2. Go to **Extensions** (or type `chrome://extensions/`)
+3. Toggle **"Developer mode"** ON (top-right corner)
+
+### Firefox:
+1. Type `about:config` in the address bar
+2. Accept the warning prompt
+3. Search for `xpinstall.signatures.required`
+4. Set it to **false** (double-click to toggle)
+
+### Edge:
+1. Open **Edge Settings** (three dots menu → Extensions)
+2. Or navigate to `edge://extensions/`
+3. Toggle **"Developer mode"** ON (bottom-left)
+
+### Safari:
+1. Go to **Safari** → **Preferences** → **Advanced**
+2. Check **"Show Develop menu in menu bar"**
+3. Go to **Develop** → **Allow Unsigned Extensions** (if needed)
+
+---
+
+## 🔧 Step 2: Install Tampermonkey
 
 ### For Chrome/Chromium Browsers:
 1. Open the [Chrome Web Store](https://chrome.google.com/webstore/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
@@ -38,7 +65,7 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
 
 ---
 
-## 🚀 Step 2: Install the DMH Overlay Script
+## 🚀 Step 3: Install the DMH Overlay Script
 
 ### Method 1: Direct Installation (Recommended)
 1. **Open Tampermonkey Dashboard**
@@ -64,7 +91,7 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
 
 ---
 
-## 🎯 Step 3: Verify Installation
+## 🎯 Step 4: Verify Installation
 
 1. **Navigate to BattleMetrics**
    - Go to [battlemetrics.com](https://www.battlemetrics.com)
@@ -75,7 +102,7 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
      - 📋 **SOP** (grey)
      - 💬 **MSG** (green) 
      - 📖 **Rules** (blue)
-     - ⚡ **3.0** (version, black)
+     - ⚡ **2.9** (version, black)
 
 3. **Test CBL Integration**
    - Go to the server's player list
@@ -87,7 +114,11 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
 ## 🔧 Troubleshooting
 
 ### Script Not Working?
-1. **Check Tampermonkey is Enabled**
+1. **Check Developer Mode is Enabled**
+   - Ensure you completed Step 1 for your browser
+   - Some browsers require this for userscripts to function
+
+2. **Check Tampermonkey is Enabled**
    - Click the Tampermonkey icon
    - Ensure it shows "ON" (not "OFF")
 
@@ -195,6 +226,6 @@ If you encounter issues:
 
 ---
 
-**Version**: 3.0  
+**Version**: 2.9  
 **Last Updated**: 2025  
 **Compatibility**: Chrome, Firefox, Edge, Safari (with Tampermonkey)
