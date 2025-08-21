@@ -75,7 +75,7 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
      - 📋 **SOP** (grey)
      - 💬 **MSG** (green) 
      - 📖 **Rules** (blue)
-     - ⚡ **2.9** (version, black)
+     - ⚡ **3.0** (version, black)
 
 3. **Test CBL Integration**
    - Go to the server's player list
@@ -195,6 +195,6 @@ If you encounter issues:
 
 ---
 
-**Version**: 2.9  
+**Version**: 3.0  
 **Last Updated**: 2025  
 **Compatibility**: Chrome, Firefox, Edge, Safari (with Tampermonkey)
