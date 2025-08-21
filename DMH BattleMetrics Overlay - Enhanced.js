@@ -3,7 +3,7 @@
 // @name DMH BattleMetrics Overlay - Enhanced
 // @namespace https://www.battlemetrics.com/
 // @version 3.1
-// @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
+// @updateURL hhttps://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
 // @author DasT0m, Relish, ArmyRat60, DMH Clan <3
@@ -240,7 +240,7 @@ const UIComponents = {
     v.id="version"; v.className="bm-corner-btn bm-version-btn"; v.setAttribute('data-tooltip','Script Version');
     v.innerHTML=`<span class="version-icon">⚡</span><span class="btn-text">${CONFIG.version}</span>`;
     v.style.setProperty('--btn-color','#1a1a1a');
-    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay.js","_blank");});
+    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js","_blank");});
     wrap.appendChild(v);
   },
   getButtonIcon(label){ const icons={'SOP':'📋','MSG':'💬','Rules':'📖'}; return `<span class="btn-icon">${icons[label]||'🎲'}</span>`; },
