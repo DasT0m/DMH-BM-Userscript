@@ -34,6 +34,11 @@ Some browsers may require enabling developer mode for userscripts to function pr
 2. Or navigate to `edge://extensions/`
 3. Toggle **"Developer mode"** ON (bottom-left)
 
+### Opera:
+1. Open **Opera Settings** (Opera menu → Extensions → Extensions)
+2. Or navigate to `opera://extensions/`
+3. Toggle **"Developer mode"** ON (top-right corner)
+
 ### Safari:
 1. Go to **Safari** → **Preferences** → **Advanced**
 2. Check **"Show Develop menu in menu bar"**
@@ -57,6 +62,12 @@ Some browsers may require enabling developer mode for userscripts to function pr
 1. Open the [Microsoft Edge Add-ons store](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
 2. Click **"Get"**
 3. Click **"Add extension"**
+
+### For Opera:
+1. Open the [Opera Add-ons store](https://addons.opera.com/en/extensions/details/tampermonkey-beta/)
+2. Click **"Add to Opera"**
+3. Click **"Add extension"** in the popup
+4. *Alternative*: Opera can also install Chrome extensions from the Chrome Web Store
 
 ### For Safari:
 1. Open the [Mac App Store](https://apps.apple.com/us/app/tampermonkey/id1482490089)
@@ -102,7 +113,7 @@ Some browsers may require enabling developer mode for userscripts to function pr
      - 📋 **SOP** (grey)
      - 💬 **MSG** (green) 
      - 📖 **Rules** (blue)
-     - ⚡ **2.9** (version, black)
+     - ⚡ **3.0** (version, black)
 
 3. **Test CBL Integration**
    - Go to the server's player list
@@ -226,6 +237,6 @@ If you encounter issues:
 
 ---
 
-**Version**: 2.9  
+**Version**: 3.0  
 **Last Updated**: 2025  
-**Compatibility**: Chrome, Firefox, Edge, Safari (with Tampermonkey)
+**Compatibility**: Chrome, Firefox, Edge, Opera, Safari (with Tampermonkey)
