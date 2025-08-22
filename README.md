@@ -113,7 +113,7 @@ Some browsers may require enabling developer mode for userscripts to function pr
      - 📋 **SOP** (grey)
      - 💬 **MSG** (green) 
      - 📖 **Rules** (blue)
-     - ⚡ **3.0** (version, black)
+     - ⚡ **3.3** (version, black)
 
 3. **Test CBL Integration**
    - Go to the server's player list
@@ -237,6 +237,6 @@ If you encounter issues:
 
 ---
 
-**Version**: 3.0  
+**Version**: 3.3  
 **Last Updated**: 2025  
 **Compatibility**: Chrome, Firefox, Edge, Opera, Safari (with Tampermonkey)
