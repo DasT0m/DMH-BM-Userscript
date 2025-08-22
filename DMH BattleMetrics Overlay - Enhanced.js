@@ -2,8 +2,8 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay - Enhanced
 // @namespace https://www.battlemetrics.com/
-// @version 3.1
-// @updateURL hhttps://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
+// @version 3.3
+// @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
 // @author DasT0m, Relish, ArmyRat60, DMH Clan <3
@@ -20,7 +20,7 @@
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "3.1",
+  version: "3.3",
   updateRate: 150,
 
   servers: [
@@ -29,8 +29,7 @@ const CONFIG = {
     { id: "Rules", label: "Rules", url: "https://docs.google.com/document/d/e/2PACX-1vQzcm1es81lsxBEnXmSPRlqSS8Wgm04rd0KTmeJn88CN3Lo8pg1sT2-C1WTEXDBJfiDmW7Y6sJwv-Vi/pub", backgroundColor: "Blue" }
   ],
 
-  graphqlEndpoint: "https://communitybanlist.com/graphql",
-  adminListURL: "https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/admins.json"
+  graphqlEndpoint: "https://communitybanlist.com/graphql"
 };
 
 const COLORS = {
@@ -66,7 +65,6 @@ const SELECTORS = {
   logContainerAlt: ".css-b7r34x",
   timeStamp: ".css-z1s6qn",
   playerName: ".css-1ewh5td",
-  activityName: ".css-fj458c",
   messageLog: ".css-ym7lu8",
   bmNoteFlag: ".css-he5ni6",
   playerPageTitle: "#RCONPlayerPage > h1",
@@ -157,10 +155,10 @@ const StyleManager = {
     const styles = {
       zShift: ".css-ym7lu8{z-index:2;}","zShiftTime":".css-z1s6qn{z-index:3;}",
       zShiftTimeDate:".css-1jtoyp{z-index:3;}",
-      teamkillBar:".css-1tuqie1{background-color:#5600ff1a;width:1920px}",
-      moderationBar:".css-1rwnm41{background-color:#ff000008;width:1920px;}",
-      adminCam:".css-1fy5con{background-color:#31e3ff21;width:1920px}",
-      nobranding:"#RCONLayout > nav > ul > li.css-1nxi32t > a{background-color:#31e3ff21;width:1920px}"
+      teamkillBar:".css-1tuqie1{background-color:#5600ff1a;width:100vw}",
+      moderationBar:".css-1rwnm41{background-color:#ff000008;width:100vw;}",
+      adminCam:".css-1fy5con{background-color:#31e3ff21;width:100vw}",
+      nobranding:"#RCONLayout > nav > ul > li.css-1nxi32t > a{background-color:#31e3ff21;width:100vw}"
     };
     Object.values(styles).forEach(s=>GM_addStyle(s));
     this.addCBLPlayerListStyles();
@@ -240,7 +238,7 @@ const UIComponents = {
     v.id="version"; v.className="bm-corner-btn bm-version-btn"; v.setAttribute('data-tooltip','Script Version');
     v.innerHTML=`<span class="version-icon">⚡</span><span class="btn-text">${CONFIG.version}</span>`;
     v.style.setProperty('--btn-color','#1a1a1a');
-    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js","_blank");});
+    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay.js","_blank");});
     wrap.appendChild(v);
   },
   getButtonIcon(label){ const icons={'SOP':'📋','MSG':'💬','Rules':'📖'}; return `<span class="btn-icon">${icons[label]||'🎲'}</span>`; },
@@ -752,8 +750,18 @@ const LogProcessor = {
   applyColorToElements(selector,patterns,color){
     Utils.safeQuery(selector,els=>{
       els.forEach(el=>{
+        // Skip if element already has a color set (respects CBL/admin coloring)
         if(el.style.color && el.style.color!=='') return;
-        for(const phrase of patterns){ if(el.textContent.includes(phrase)){ el.style.color=color; if(color===COLORS.automatedMessage) el.style.opacity="0.6"; break; } }
+        // Skip if element has CBL or admin classes
+        if(el.classList.contains('cbl-player-name') || el.classList.contains('dmh-admin-name')) return;
+        
+        for(const phrase of patterns){ 
+          if(el.textContent.includes(phrase)){ 
+            el.style.color=color; 
+            if(color===COLORS.automatedMessage) el.style.opacity="0.6"; 
+            break; 
+          } 
+        }
       });
     });
   }
@@ -847,10 +855,10 @@ const MainUpdater = {
   async update(){
     if(!this.isLogContainerPresent()) return;
     LogProcessor.applyTimeStamps();
-    LogProcessor.applyLogColoring();
     this.handlePlayerInterface();
     DialogStyler.styleDialogs();
     await this.handleCBLPlayerList();
+    LogProcessor.applyLogColoring();
   },
   isLogContainerPresent(){ return document.querySelector(SELECTORS.logContainer)||document.querySelector(SELECTORS.logContainerAlt); },
 
