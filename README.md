@@ -22,6 +22,12 @@ Some browsers may require enabling developer mode for userscripts to function pr
 1. Open **Chrome Settings** (three dots menu → Settings)
 2. Go to **Extensions** (or type `chrome://extensions/`)
 3. Toggle **"Developer mode"** ON (top-right corner)
+4. **Additional Chrome Settings** (Required for some users):
+   - Find **Tampermonkey** in your extensions list
+   - Click **"Details"** on the Tampermonkey extension
+   - Enable **"Allow User Scripts"** (toggle ON)
+   - Enable **"Allow access to file URLs"** (toggle ON)
+   - These options are OFF by default but may be required for proper functionality
 
 ### Firefox:
 1. Type `about:config` in the address bar
@@ -113,7 +119,7 @@ Some browsers may require enabling developer mode for userscripts to function pr
      - 📋 **SOP** (grey)
      - 💬 **MSG** (green) 
      - 📖 **Rules** (blue)
-     - ⚡ **3.3** (version, black)
+     - ⚡ **3.X** (version, black)
 
 3. **Test CBL Integration**
    - Go to the server's player list
@@ -129,7 +135,14 @@ Some browsers may require enabling developer mode for userscripts to function pr
    - Ensure you completed Step 1 for your browser
    - Some browsers require this for userscripts to function
 
-2. **Check Tampermonkey is Enabled**
+2. **Chrome Users - Check Additional Settings**
+   - Go to `chrome://extensions/`
+   - Click **"Details"** on Tampermonkey
+   - Ensure **"Allow User Scripts"** is enabled
+   - Ensure **"Allow access to file URLs"** is enabled
+   - These are often OFF by default and cause functionality issues
+
+3. **Check Tampermonkey is Enabled**
    - Click the Tampermonkey icon
    - Ensure it shows "ON" (not "OFF")
 
@@ -237,6 +250,6 @@ If you encounter issues:
 
 ---
 
-**Version**: 3.3  
+**Version**: 3.X  
 **Last Updated**: 2025  
 **Compatibility**: Chrome, Firefox, Edge, Opera, Safari (with Tampermonkey)
