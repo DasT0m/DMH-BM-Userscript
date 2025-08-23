@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay - Enhanced
 // @namespace https://www.battlemetrics.com/
-// @version 3.3
+// @version 3.4
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
@@ -20,8 +20,18 @@
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "3.3",
+  version: "3.4",
   updateRate: 150,
+  
+  // NEW: Enhanced caching configuration
+  cacheConfig: {
+    persistentStorage: true,        // Use localStorage for persistence
+    cacheExpiry: 30 * 60 * 1000,   // 30 minutes for CBL data
+    adminCacheExpiry: 10 * 60 * 1000, // 10 minutes for admin status
+    maxCacheSize: 1000,             // Maximum cache entries
+    preloadThreshold: 50,           // Preload when this many players are visible
+    aggressiveCaching: true         // Cache more aggressively
+  },
 
   servers: [
     { id: "SOP", label: "SOP", url: "https://docs.google.com/document/d/e/2PACX-1vTETPd69RXThe_gTuukFXeeMVTOhMvyzGmyeuXFKkHYd_Cg4CTREEwP2K61u_sWOleMJrkMKwQbBnCB/pub", backgroundColor: "Grey" },
@@ -110,7 +120,7 @@ const TEXT_PATTERNS = {
 };
 
 // ========================================
-// UTILS
+// UTILS (Enhanced with debugging and cache utilities)
 // ========================================
 const Utils = {
   safeQuery(selector, cb){ try{ const els=document.querySelectorAll(selector); if(els.length) cb(els);}catch(e){console.warn(`Q fail ${selector}`,e)}},
@@ -144,7 +154,184 @@ const Utils = {
   ensureElement(id, mk){ if(!document.getElementById(id)) mk(); },
   removeElement(id){ document.getElementById(id)?.remove(); },
   delay(ms){ return new Promise(r=>setTimeout(r,ms)); },
-  escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); }
+  escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"); },
+  
+  // NEW: Enhanced debugging utilities
+  debugCacheStatus() {
+    console.log('=== CACHE STATUS DEBUG ===');
+    console.log(`CBL Cache: ${CBLPlayerListManager.cblCache.size} entries`);
+    console.log(`Admin Cache: ${AdminBadgeDecorator.adminCache.size} entries`);
+    console.log(`Element Cache: ${CBLPlayerListManager.elementCache.size} entries`);
+    console.log(`Processed SteamIDs: ${CBLPlayerListManager.processedSteamIDs.size}`);
+    console.log(`Colored Elements: ${CBLPlayerListManager.coloredElements.size || 'WeakSet (unknown size)'}`);
+    console.log('========================');
+  },
+  
+  // NEW: Force refresh all styling (global utility)
+  forceRefreshAllStyling() {
+    console.log('Forcing refresh of all styling...');
+    MainUpdater.forceRefreshAll();
+  },
+  
+  // NEW: Clear all caches (global utility)
+  clearAllCaches() {
+    console.log('Clearing all caches...');
+    CBLPlayerListManager.reset();
+    AdminBadgeDecorator.clearCache();
+    console.log('All caches cleared');
+  }
+};
+
+// ========================================
+// PERSISTENT STORAGE MANAGER (NEW)
+// ========================================
+const PersistentStorage = {
+  storageKey: 'DMH_BM_CACHE',
+  version: '1.0',
+  
+  // Save cache data to localStorage
+  saveCache() {
+    if (!CONFIG.cacheConfig.persistentStorage) return;
+    
+    try {
+      const cacheData = {
+        version: this.version,
+        timestamp: Date.now(),
+        cblData: this.serializeCBLData(),
+        adminData: this.serializeAdminData(),
+        metadata: {
+          serverId: this.extractServerId(),
+          lastUpdate: Date.now()
+        }
+      };
+      
+      localStorage.setItem(this.storageKey, JSON.stringify(cacheData));
+      console.log(`Cache saved to localStorage: ${Object.keys(cacheData.cblData).length} CBL entries, ${Object.keys(cacheData.adminData).length} admin entries`);
+    } catch (e) {
+      console.warn('Failed to save cache to localStorage:', e);
+    }
+  },
+  
+  // Load cache data from localStorage
+  loadCache() {
+    if (!CONFIG.cacheConfig.persistentStorage) return false;
+    
+    try {
+      const cached = localStorage.getItem(this.storageKey);
+      if (!cached) return false;
+      
+      const cacheData = JSON.parse(cached);
+      
+      // Version check
+      if (cacheData.version !== this.version) {
+        console.log('Cache version mismatch, clearing old cache');
+        this.clearStorage();
+        return false;
+      }
+      
+      // Expiry check
+      const now = Date.now();
+      if (now - cacheData.timestamp > CONFIG.cacheConfig.cacheExpiry) {
+        console.log('Cache expired, clearing old cache');
+        this.clearStorage();
+        return false;
+      }
+      
+      // Server ID check (only restore if same server)
+      if (cacheData.metadata?.serverId !== this.extractServerId()) {
+        console.log('Different server, not restoring cache');
+        return false;
+      }
+      
+      // Restore caches
+      this.deserializeCBLData(cacheData.cblData);
+      this.deserializeAdminData(cacheData.adminData);
+      
+      console.log(`Cache restored from localStorage: ${Object.keys(cacheData.cblData).length} CBL entries, ${Object.keys(cacheData.adminData).length} admin entries`);
+      return true;
+      
+    } catch (e) {
+      console.warn('Failed to load cache from localStorage:', e);
+      this.clearStorage();
+      return false;
+    }
+  },
+  
+  // Serialize CBL data for storage
+  serializeCBLData() {
+    const serialized = {};
+    for (const [steamID, data] of CBLPlayerListManager.cblCache.entries()) {
+      serialized[steamID] = {
+        ...data,
+        timestamp: Date.now()
+      };
+    }
+    return serialized;
+  },
+  
+  // Deserialize CBL data from storage
+  deserializeCBLData(data) {
+    CBLPlayerListManager.cblCache.clear();
+    for (const [steamID, entry] of Object.entries(data)) {
+      CBLPlayerListManager.cblCache.set(steamID, entry);
+      CBLPlayerListManager.processedSteamIDs.add(steamID);
+    }
+  },
+  
+  // Serialize admin data for storage
+  serializeAdminData() {
+    const serialized = {};
+    for (const [steamID, data] of AdminBadgeDecorator.adminCache.entries()) {
+      serialized[steamID] = data;
+    }
+    return serialized;
+  },
+  
+  // Deserialize admin data from storage
+  deserializeAdminData(data) {
+    AdminBadgeDecorator.adminCache.clear();
+    for (const [steamID, entry] of Object.entries(data)) {
+      AdminBadgeDecorator.adminCache.set(steamID, entry);
+    }
+  },
+  
+  // Extract server ID from current URL
+  extractServerId() {
+    const match = location.href.match(/\/rcon\/servers\/(\d+)/);
+    return match ? match[1] : null;
+  },
+  
+  // Clear localStorage
+  clearStorage() {
+    try {
+      localStorage.removeItem(this.storageKey);
+      console.log('LocalStorage cache cleared');
+    } catch (e) {
+      console.warn('Failed to clear localStorage:', e);
+    }
+  },
+  
+  // Get cache statistics
+  getStats() {
+    try {
+      const cached = localStorage.getItem(this.storageKey);
+      if (!cached) return { size: 0, age: 0 };
+      
+      const data = JSON.parse(cached);
+      const size = new Blob([cached]).size;
+      const age = Date.now() - data.timestamp;
+      
+      return {
+        size: size,
+        age: age,
+        cblEntries: Object.keys(data.cblData || {}).length,
+        adminEntries: Object.keys(data.adminData || {}).length,
+        serverId: data.metadata?.serverId
+      };
+    } catch (e) {
+      return { size: 0, age: 0, error: e.message };
+    }
+  }
 };
 
 // ========================================
@@ -238,7 +425,7 @@ const UIComponents = {
     v.id="version"; v.className="bm-corner-btn bm-version-btn"; v.setAttribute('data-tooltip','Script Version');
     v.innerHTML=`<span class="version-icon">⚡</span><span class="btn-text">${CONFIG.version}</span>`;
     v.style.setProperty('--btn-color','#1a1a1a');
-    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay.js","_blank");});
+    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js","_blank");});
     wrap.appendChild(v);
   },
   getButtonIcon(label){ const icons={'SOP':'📋','MSG':'💬','Rules':'📖'}; return `<span class="btn-icon">${icons[label]||'🎲'}</span>`; },
@@ -330,15 +517,16 @@ const CBLManager = {
 };
 
 // ========================================
-// ADMIN BADGE DECORATOR (Enhanced with caching)
+// ADMIN BADGE DECORATOR (Enhanced with robust caching)
 // ========================================
 const AdminBadgeDecorator = {
   PURPLE_RGB: "rgb(208, 58, 250)", // from your screenshot
   SHIELD_HTML: ' <span class="dmh-admin-shield" title="DMH Admin">🛡️</span>',
   
-  // NEW: Cache for admin status
-  adminCache: new Map(), // steamID -> boolean
+  // Enhanced: Better cache for admin status
+  adminCache: new Map(), // steamID -> { isAdmin: boolean, timestamp: number }
   adminElements: new WeakSet(), // track which elements we've decorated
+  elementAdminCache: new Map(), // element -> steamID for reverse lookup
 
   // Detects "[DMH] Admin" flame/icon near the name
   hasAdminFlame(row){
@@ -366,7 +554,7 @@ const AdminBadgeDecorator = {
   },
 
   // Apply cyan highlight + shield, overriding prior color (e.g., CBL)
-  decorateName(nameEl){
+  decorateName(nameEl, steamID = null){
     if (!nameEl) return;
     
     // Avoid duplicate shields
@@ -376,6 +564,11 @@ const AdminBadgeDecorator = {
     
     // Mark as decorated to avoid re-processing
     this.adminElements.add(nameEl);
+    
+    // Store reverse lookup for cache management
+    if (steamID) {
+      this.elementAdminCache.set(nameEl, steamID);
+    }
     
     // Cyan highlight (match your scheme)
     const imp=(el,p,v)=>el.style.setProperty(p,v,'important');
@@ -392,18 +585,27 @@ const AdminBadgeDecorator = {
     }
   },
 
-  // NEW: Check cache first, then detect and cache result
+  // Enhanced: Check cache first, then detect and cache result
   isAdminCached(steamID, row) {
     if (!steamID) return false;
     
     // Check cache first
     if (this.adminCache.has(steamID)) {
-      return this.adminCache.get(steamID);
+      const cacheEntry = this.adminCache.get(steamID);
+      // Check if cache is still valid (5 minutes)
+      if (Date.now() - cacheEntry.timestamp < 5 * 60 * 1000) {
+        return cacheEntry.isAdmin;
+      }
+      // Cache expired, remove it
+      this.adminCache.delete(steamID);
     }
     
     // Not in cache, detect and store
     const isAdmin = this.hasAdminFlame(row);
-    this.adminCache.set(steamID, isAdmin);
+    this.adminCache.set(steamID, {
+      isAdmin: isAdmin,
+      timestamp: Date.now()
+    });
     
     if (isAdmin) {
       console.log(`Cached admin status for ${steamID}`);
@@ -412,24 +614,38 @@ const AdminBadgeDecorator = {
     return isAdmin;
   },
 
-  // NEW: Apply decoration from cache (fast path)
+  // Enhanced: Apply decoration from cache (fast path)
   applyFromCache(nameEl, steamID) {
     if (!nameEl || !steamID) return false;
     
-    const isAdmin = this.adminCache.get(steamID);
-    if (isAdmin === true && !this.adminElements.has(nameEl)) {
-      this.decorateName(nameEl);
+    const cacheEntry = this.adminCache.get(steamID);
+    if (cacheEntry && cacheEntry.isAdmin && !this.adminElements.has(nameEl)) {
+      this.decorateName(nameEl, steamID);
       return true;
     }
     return false;
   },
 
-  // Updated main method with caching
+  // Enhanced: Check if element needs re-decoration
+  needsRedecoration(nameEl) {
+    if (!nameEl) return false;
+    
+    // Check if admin shield is missing
+    if (!nameEl.querySelector('.dmh-admin-shield')) return true;
+    
+    // Check if admin styling is missing
+    const currentColor = nameEl.style.getPropertyValue('color');
+    if (!currentColor || !currentColor.includes('00fff7')) return true;
+    
+    return false;
+  },
+
+  // Enhanced main method with better caching
   maybeDecorate(row, nameEl, steamID = null){
     if (!row || !nameEl) return;
     
-    // If we already decorated this element, skip
-    if (this.adminElements.has(nameEl)) return;
+    // If we already decorated this element and it still looks good, skip
+    if (this.adminElements.has(nameEl) && !this.needsRedecoration(nameEl)) return;
     
     // Try cache first if we have steamID
     if (steamID && this.applyFromCache(nameEl, steamID)) {
@@ -440,7 +656,7 @@ const AdminBadgeDecorator = {
     if (steamID) {
       const isAdmin = this.isAdminCached(steamID, row);
       if (isAdmin) {
-        this.decorateName(nameEl);
+        this.decorateName(nameEl, steamID);
       }
     } else {
       // Fallback for when we don't have steamID
@@ -450,25 +666,72 @@ const AdminBadgeDecorator = {
     }
   },
 
-  // NEW: Clear caches (useful for debugging or reset)
+  // Enhanced: Clear caches (useful for debugging or reset)
   clearCache() {
     this.adminCache.clear();
     this.adminElements = new WeakSet();
+    this.elementAdminCache.clear();
     console.log("Admin cache cleared");
+  },
+
+  // NEW: Clean up expired cache entries
+  cleanupCache() {
+    const now = Date.now();
+    const maxAge = 5 * 60 * 1000; // 5 minutes
+    
+    for (const [steamID, cacheEntry] of this.adminCache.entries()) {
+      if (now - cacheEntry.timestamp > maxAge) {
+        this.adminCache.delete(steamID);
+      }
+    }
+    
+    console.log(`Admin cache cleaned up, ${this.adminCache.size} entries remaining`);
+  },
+
+  // NEW: Force refresh admin badges for all visible elements
+  forceRefreshAll() {
+    try {
+      const rows = document.querySelectorAll('div[role="row"], tr, div[data-session]');
+      let refreshed = 0;
+      
+      rows.forEach(row => {
+        const steamID = CBLPlayerListManager.extractSteamID(row);
+        const nameEl = CBLPlayerListManager.extractNameElement(row);
+        
+        if (!nameEl || !steamID) return;
+        
+        const cacheEntry = this.adminCache.get(steamID);
+        if (cacheEntry && cacheEntry.isAdmin) {
+          this.decorateName(nameEl, steamID);
+          refreshed++;
+        }
+      });
+      
+      console.log(`Admin force refresh: refreshed ${refreshed} admin badges`);
+    } catch (e) {
+      console.warn('Admin force refresh error:', e);
+    }
   }
 };
 
 // ========================================
-// CBL PLAYER LIST (Updated to use admin cache)
+// CBL PLAYER LIST (Enhanced with robust caching)
 // ========================================
 const CBLPlayerListManager = {
-  processedPlayers:new Set(),
-  cblCache:new Map(),
-  coloredElements:new WeakSet(),
-  processedSteamIDs:new Set(), // NEW: Track which steamIDs we've processed
-  isProcessing:false,
-  lastProcessTime:0,
-  listObserver:null,
+  processedPlayers: new Set(),
+  cblCache: new Map(),
+  coloredElements: new WeakSet(),
+  processedSteamIDs: new Set(),
+  isProcessing: false,
+  lastProcessTime: 0,
+  listObserver: null,
+  cacheWarmed: false, // NEW: Track if cache has been warmed from storage
+  
+  // NEW: Enhanced caching for better persistence
+  elementCache: new Map(), // steamID -> { element, timestamp, data }
+  scrollObserver: null,
+  lastScrollTime: 0,
+  scrollThrottle: 100, // ms
 
   observePlayerListContainer(){
     if(this.listObserver) return;
@@ -479,27 +742,97 @@ const CBLPlayerListManager = {
       document.querySelector('tbody');
     if(!container) return;
 
-    this.listObserver=new MutationObserver(muts=>{
+    // NEW: Observe scroll events for better cache management
+    this.setupScrollObserver(container);
+
+    this.listObserver = new MutationObserver(muts => {
       for(const m of muts){
-        if(m.type==='childList'){
-          m.addedNodes.forEach(node=>{
-            if(node.nodeType!==1) return;
+        if(m.type === 'childList'){
+          m.addedNodes.forEach(node => {
+            if(node.nodeType !== 1) return;
             if(!this.tryProcessNode(node)){
-              node.querySelectorAll?.('div[role="row"], tr, div[data-session]').forEach(r=>this.tryProcessNode(r));
+              node.querySelectorAll?.('div[role="row"], tr, div[data-session]').forEach(r => this.tryProcessNode(r));
             }
           });
         }
       }
     });
-    this.listObserver.observe(container,{childList:true,subtree:true});
-    console.log('CBL: observing player list for dynamic rows');
+    this.listObserver.observe(container, {childList: true, subtree: true});
+    console.log('CBL: observing player list for dynamic rows + scroll events');
+  },
+
+  // NEW: Setup scroll observer for better cache management
+  setupScrollObserver(container) {
+    if (this.scrollObserver) {
+      this.scrollObserver.disconnect();
+    }
+
+    this.scrollObserver = new MutationObserver(() => {
+      const now = Date.now();
+      if (now - this.lastScrollTime > this.scrollThrottle) {
+        this.lastScrollTime = now;
+        this.handleScrollEvent();
+      }
+    });
+
+    // Also listen for actual scroll events
+    container.addEventListener('scroll', () => {
+      const now = Date.now();
+      if (now - this.lastScrollTime > this.scrollThrottle) {
+        this.lastScrollTime = now;
+        this.handleScrollEvent();
+      }
+    }, { passive: true });
+
+    console.log('CBL: scroll observer setup complete');
+  },
+
+  // NEW: Handle scroll events to refresh styling
+  handleScrollEvent() {
+    // Debounced scroll handling to refresh visible elements
+    setTimeout(() => {
+      this.refreshVisibleElements();
+    }, 50);
+  },
+
+  // NEW: Refresh styling for visible elements
+  refreshVisibleElements() {
+    try {
+      const rows = document.querySelectorAll('div[role="row"], tr, div[data-session]');
+      let refreshed = 0;
+      
+      rows.forEach(row => {
+        const steamID = this.extractSteamID(row);
+        const nameEl = this.extractNameElement(row);
+        
+        if (!nameEl || !steamID) return;
+        
+        // Check if we have cached data for this steamID
+        const cached = this.cblCache.get(steamID);
+        if (cached) {
+          // Reapply CBL styling
+          this.applyPlayerNameColor(nameEl, cached);
+          
+          // Reapply admin badge if needed
+          AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
+          
+          refreshed++;
+        }
+      });
+      
+      if (refreshed > 0) {
+        console.log(`CBL scroll refresh: refreshed ${refreshed} visible elements`);
+      }
+    } catch (e) {
+      console.warn('CBL scroll refresh error:', e);
+    }
   },
 
   tryProcessNode(node){
     try{
       if(!(node instanceof Element)) return false;
-      const role=node.getAttribute('role');
-      if(!(role==='row'||node.matches('tr')||node.hasAttribute('data-session'))) return false;
+      const role = node.getAttribute('role');
+      if(!(role === 'row' || node.matches('tr') || node.hasAttribute('data-session'))) return false;
       this.processPlayerRow(node);
       return true;
     }catch{ return false; }
@@ -509,34 +842,44 @@ const CBLPlayerListManager = {
     if(this.isProcessing) return;
     if(!window.location.href.match(/\/rcon\/servers\/\d+(?:\/.*)?$/)) return;
 
-    const now=Date.now();
-    if(now-this.lastProcessTime<10000) return; // 10s window
+    const now = Date.now();
+    if(now - this.lastProcessTime < 10000) return; // 10s window
 
     try{
-      this.isProcessing=true; this.lastProcessTime=now;
-      const rows=document.querySelectorAll('div[role="row"], tr, div[data-session]');
-      let count=0;
-      for(const r of rows){ if(await this.processPlayerRow(r)) count++; }
-      console.log(`CBL scan: styled ${count} rows (cached where possible).`);
-    }catch(e){ console.error("CBL list scan error:",e); }
-    finally{ this.isProcessing=false; }
+      this.isProcessing = true; 
+      this.lastProcessTime = now;
+      const rows = document.querySelectorAll('div[role="row"], tr, div[data-session]');
+      let count = 0;
+      for(const r of rows){ 
+        if(await this.processPlayerRow(r)) count++; 
+      }
+      console.log(`CBL scan: styled ${count} rows (enhanced caching active).`);
+    }catch(e){ console.error("CBL list scan error:", e); }
+    finally{ this.isProcessing = false; }
   },
 
   fastRescan(){
     try{
       this.observePlayerListContainer?.();
-      const rows=document.querySelectorAll('div[role="row"], tr, div[data-session]');
-      let applied=0;
-      rows.forEach(row=>{
-        const steamID=this.extractSteamID(row);
-        const nameEl=this.extractNameElement(row);
+      const rows = document.querySelectorAll('div[role="row"], tr, div[data-session]');
+      let applied = 0;
+      
+      rows.forEach(row => {
+        const steamID = this.extractSteamID(row);
+        const nameEl = this.extractNameElement(row);
         if(!nameEl) return;
         
-        // NEW: Always reapply styling for cached data (force refresh)
+        // Enhanced: Always reapply styling for cached data
         if(steamID){
-          const cached=this.cblCache.get(steamID);
+          const cached = this.cblCache.get(steamID);
           if(cached){
-            this.applyPlayerNameColor(nameEl,cached);
+            this.applyPlayerNameColor(nameEl, cached);
+            // NEW: Update element cache
+            this.elementCache.set(steamID, {
+              element: nameEl,
+              timestamp: Date.now(),
+              data: cached
+            });
           }
           
           // Always check admin status from cache
@@ -546,62 +889,81 @@ const CBLPlayerListManager = {
           AdminBadgeDecorator.maybeDecorate(row, nameEl);
         }
         
-        // NEW: Don't rely on coloredElements tracking for fastRescan
-        // Always mark as processed after applying styles
+        // Mark as processed
         this.coloredElements.add(nameEl);
         applied++;
       });
-      this.lastProcessTime=0;
-      if(applied) console.log(`CBL fastRescan: re-applied for ${applied} rows + admin badges (cached).`);
+      
+      this.lastProcessTime = 0;
+      if(applied) console.log(`CBL fastRescan: re-applied for ${applied} rows + admin badges (enhanced cache).`);
     }catch(e){
-      console.warn('CBL fastRescan error:',e);
+      console.warn('CBL fastRescan error:', e);
     }
   },
 
   async processPlayerRow(row){
     try{
-      const steamID=this.extractSteamID(row);
-      const nameEl=this.extractNameElement(row);
+      const steamID = this.extractSteamID(row);
+      const nameEl = this.extractNameElement(row);
       if(!nameEl) return false;
       
-      // NEW: Check if we've already processed this steamID and the element hasn't been colored
-      // This handles cases where DOM elements are recreated but we have cached data
-      if(steamID && this.processedSteamIDs.has(steamID) && !this.coloredElements.has(nameEl)){
-        // Apply cached data immediately
-        const cached=this.cblCache.get(steamID);
+      // Enhanced: Better cache checking with element validation
+      if(steamID && this.processedSteamIDs.has(steamID)){
+        const cached = this.cblCache.get(steamID);
         if(cached){
-          this.applyPlayerNameColor(nameEl,cached);
+          // Check if element needs re-styling
+          const needsRestyling = !this.coloredElements.has(nameEl) || 
+                                !nameEl.classList.contains('cbl-player-name');
+          
+          if (needsRestyling) {
+            this.applyPlayerNameColor(nameEl, cached);
+            // Update element cache
+            this.elementCache.set(steamID, {
+              element: nameEl,
+              timestamp: Date.now(),
+              data: cached
+            });
+          }
+          
+          // Always ensure admin badge is present
+          AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
+          this.coloredElements.add(nameEl);
+          return true;
         }
-        AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
-        this.coloredElements.add(nameEl);
-        return true;
       }
       
-      // Skip if already colored (existing logic)
-      if(this.coloredElements.has(nameEl)) {
-        // Even if previously colored, ensure admin badge shows if present (from cache)
+      // Skip if already properly colored
+      if(this.coloredElements.has(nameEl) && nameEl.classList.contains('cbl-player-name')) {
+        // Ensure admin badge shows if present
         AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
         return false;
       }
 
       // CBL first (may color differently)
       if(steamID){
-        let cblData=this.cblCache.get(steamID);
+        let cblData = this.cblCache.get(steamID);
         if(!cblData){
-          cblData=await this.fetchCBLData(steamID);
-          this.cblCache.set(steamID,cblData);
+          cblData = await this.fetchCBLData(steamID);
+          this.cblCache.set(steamID, cblData);
         }
-        this.applyPlayerNameColor(nameEl,cblData);
-        // NEW: Track that we've processed this steamID
+        this.applyPlayerNameColor(nameEl, cblData);
+        
+        // NEW: Enhanced element caching
+        this.elementCache.set(steamID, {
+          element: nameEl,
+          timestamp: Date.now(),
+          data: cblData
+        });
+        
         this.processedSteamIDs.add(steamID);
       }
 
-      // Admin badge decoration with caching (pass steamID for cache lookup)
+      // Admin badge decoration with caching
       AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
 
       this.coloredElements.add(nameEl);
       return true;
-    }catch(e){ console.warn("CBL row process error:",e); return false; }
+    }catch(e){ console.warn("CBL row process error:", e); return false; }
   },
 
   extractSteamID(row){
@@ -690,30 +1052,145 @@ const CBLPlayerListManager = {
   softReset(){
     this.isProcessing = false;
     this.lastProcessTime = 0;
-    // NEW: Don't clear processedSteamIDs on soft reset to maintain cache benefits
+    // Enhanced: Preserve more cache data for better performance
     if(this.listObserver){
       this.listObserver.disconnect();
       this.listObserver = null;
     }
-    console.log("CBL Player List Manager soft reset (cache preserved)");
+    if(this.scrollObserver){
+      this.scrollObserver.disconnect();
+      this.scrollObserver = null;
+    }
+    console.log("CBL Player List Manager soft reset (enhanced cache preserved)");
   },
 
   reset(){
     this.processedPlayers.clear();
-    this.isProcessing=false;
-    this.lastProcessTime=0;
-    this.coloredElements=new WeakSet();
-    this.processedSteamIDs.clear(); // NEW: Clear steamID tracking
+    this.isProcessing = false;
+    this.lastProcessTime = 0;
+    this.coloredElements = new WeakSet();
+    this.processedSteamIDs.clear();
     this.cblCache.clear();
+    this.elementCache.clear(); // NEW: Clear element cache
+    this.cacheWarmed = false; // NEW: Reset cache warming flag
     
-    // Also clear admin cache on reset
+    // Clear admin cache on reset
     AdminBadgeDecorator.clearCache();
     
     if(this.listObserver){
       this.listObserver.disconnect();
-      this.listObserver=null;
+      this.listObserver = null;
     }
-    console.log("CBL Player List Manager full reset (including admin cache)");
+    if(this.scrollObserver){
+      this.scrollObserver.disconnect();
+      this.scrollObserver = null;
+    }
+    console.log("CBL Player List Manager full reset (including enhanced caches)");
+  },
+
+  // NEW: Enhanced cache management methods
+  cleanupOldCache() {
+    const now = Date.now();
+    const maxAge = 5 * 60 * 1000; // 5 minutes
+    
+    for (const [steamID, cacheEntry] of this.elementCache.entries()) {
+      if (now - cacheEntry.timestamp > maxAge) {
+        this.elementCache.delete(steamID);
+      }
+    }
+    
+    // Clean up old CBL cache entries using config
+    const cblMaxAge = CONFIG.cacheConfig.cacheExpiry;
+    for (const [steamID, data] of this.cblCache.entries()) {
+      if (data.timestamp && (now - data.timestamp > cblMaxAge)) {
+        this.cblCache.delete(steamID);
+      }
+    }
+    
+    // NEW: Save cache to persistent storage after cleanup
+    if (CONFIG.cacheConfig.persistentStorage) {
+      PersistentStorage.saveCache();
+    }
+  },
+
+  // NEW: Force refresh all visible elements
+  forceRefreshAll() {
+    try {
+      const rows = document.querySelectorAll('div[role="row"], tr, div[data-session]');
+      let refreshed = 0;
+      
+      rows.forEach(row => {
+        const steamID = this.extractSteamID(row);
+        const nameEl = this.extractNameElement(row);
+        
+        if (!nameEl || !steamID) return;
+        
+        const cached = this.cblCache.get(steamID);
+        if (cached) {
+          this.applyPlayerNameColor(nameEl, cached);
+          AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
+          refreshed++;
+        }
+      });
+      
+      console.log(`CBL force refresh: refreshed ${refreshed} elements`);
+    } catch (e) {
+      console.warn('CBL force refresh error:', e);
+    }
+  },
+
+  // NEW: Smart cache warming - immediately apply cached data without API calls
+  warmCacheFromStorage() {
+    if (!CONFIG.cacheConfig.persistentStorage) return;
+    
+    try {
+      // Load cache from persistent storage
+      const restored = PersistentStorage.loadCache();
+      if (!restored) return;
+      
+      console.log('Cache warmed from storage, applying cached styling...');
+      
+      // Immediately apply cached styling to visible elements
+      const rows = document.querySelectorAll('div[role="row"], tr, div[data-session]');
+      let applied = 0;
+      
+      rows.forEach(row => {
+        const steamID = this.extractSteamID(row);
+        const nameEl = this.extractNameElement(row);
+        
+        if (!nameEl || !steamID) return;
+        
+        // Apply CBL styling from cache
+        const cached = this.cblCache.get(steamID);
+        if (cached) {
+          this.applyPlayerNameColor(nameEl, cached);
+          this.coloredElements.add(nameEl);
+          applied++;
+        }
+        
+        // Apply admin styling from cache
+        AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
+      });
+      
+      console.log(`Cache warming completed: ${applied} elements styled from cache`);
+      
+      // Mark as processed to prevent unnecessary re-processing
+      this.lastProcessTime = Date.now();
+      
+    } catch (e) {
+      console.warn('Cache warming error:', e);
+    }
+  },
+
+  // NEW: Aggressive caching - cache more data to reduce API calls
+  enableAggressiveCaching() {
+    if (!CONFIG.cacheConfig.aggressiveCaching) return;
+    
+    // Increase cache sizes and reduce expiry times
+    this.cacheExpiryMultiplier = 2; // Cache data for 2x longer
+    this.preloadThreshold = CONFIG.cacheConfig.preloadThreshold;
+    
+    console.log('Aggressive caching enabled');
   }
 };
 
@@ -805,10 +1282,12 @@ const DialogStyler = {
 };
 
 // ========================================
-// ROUTER WATCH
+// ROUTER WATCH (Enhanced with scroll handling)
 // ========================================
 const RouterWatch = {
   lastURL: location.href,
+  scrollHandlers: new Set(),
+  
   init() {
     const _ps = history.pushState;
     history.pushState = function() {
@@ -835,36 +1314,113 @@ const RouterWatch = {
     window.addEventListener('focus', () => {
       CBLPlayerListManager.fastRescan();
     });
+    
+    // NEW: Enhanced scroll event handling
+    this.setupGlobalScrollHandling();
   },
+  
   onChange() {
     if (this.lastURL !== location.href) {
+      const oldURL = this.lastURL;
       this.lastURL = location.href;
+      
+      // NEW: Enhanced navigation handling
       if (MainUpdater.isOnServerRCONPage()) {
-        CBLPlayerListManager.observePlayerListContainer();
+        // Returning to RCON page - warm cache immediately
+        if (oldURL && oldURL.includes('/rcon/players/')) {
+          console.log('Returning to RCON page from player page - warming cache...');
+          
+          // Small delay to ensure DOM is ready, then warm cache
+          setTimeout(() => {
+            CBLPlayerListManager.observePlayerListContainer();
+            CBLPlayerListManager.warmCacheFromStorage();
+          }, 100);
+        } else {
+          // Normal RCON page load
+          CBLPlayerListManager.observePlayerListContainer();
+          CBLPlayerListManager.fastRescan();
+        }
+      } else if (oldURL && oldURL.includes('/rcon/servers/') && location.href.includes('/rcon/players/')) {
+        // Navigating to player page - save cache before leaving
+        console.log('Navigating to player page - saving cache...');
+        if (CONFIG.cacheConfig.persistentStorage) {
+          PersistentStorage.saveCache();
+        }
       }
-      CBLPlayerListManager.fastRescan();
     }
+  },
+  
+  // NEW: Setup global scroll handling for better cache management
+  setupGlobalScrollHandling() {
+    // Listen for scroll events on the document and window
+    const scrollHandler = () => {
+      // Debounced scroll handling
+      clearTimeout(this.scrollTimeout);
+      this.scrollTimeout = setTimeout(() => {
+        if (MainUpdater.isOnServerRCONPage()) {
+          CBLPlayerListManager.handleScrollEvent();
+        }
+      }, 100);
+    };
+    
+    this.scrollHandlers.add(scrollHandler);
+    
+    // Add scroll listeners to common scrollable containers
+    document.addEventListener('scroll', scrollHandler, { passive: true });
+    window.addEventListener('scroll', scrollHandler, { passive: true });
+    
+    // Also listen for wheel events (for mouse wheel scrolling)
+    document.addEventListener('wheel', scrollHandler, { passive: true });
+    
+    console.log('Global scroll handling setup complete');
+  },
+  
+  // NEW: Cleanup scroll handlers
+  cleanup() {
+    this.scrollHandlers.forEach(handler => {
+      document.removeEventListener('scroll', handler);
+      window.removeEventListener('scroll', handler);
+      document.removeEventListener('wheel', handler);
+    });
+    this.scrollHandlers.clear();
   }
 };
 
 // ========================================
-// MAIN UPDATE LOOP
+// MAIN UPDATE LOOP (Enhanced with cache management)
 // ========================================
 const MainUpdater = {
-  lastPlayerKey:null,
+  lastPlayerKey: null,
+  lastCacheCleanup: 0,
+  cacheCleanupInterval: 2 * 60 * 1000, // 2 minutes
+  
   async update(){
     if(!this.isLogContainerPresent()) return;
+    
+    // Enhanced: Periodic cache cleanup
+    this.maybeCleanupCache();
+    
     LogProcessor.applyTimeStamps();
     this.handlePlayerInterface();
     DialogStyler.styleDialogs();
     await this.handleCBLPlayerList();
     LogProcessor.applyLogColoring();
   },
-  isLogContainerPresent(){ return document.querySelector(SELECTORS.logContainer)||document.querySelector(SELECTORS.logContainerAlt); },
+  
+  isLogContainerPresent(){ 
+    return document.querySelector(SELECTORS.logContainer)||document.querySelector(SELECTORS.logContainerAlt); 
+  },
 
   async handleCBLPlayerList(){
     if(this.isOnServerRCONPage()){
       CBLPlayerListManager.observePlayerListContainer();
+      
+      // NEW: Check if we should warm cache from storage first
+      if (CONFIG.cacheConfig.persistentStorage && !CBLPlayerListManager.cacheWarmed) {
+        CBLPlayerListManager.warmCacheFromStorage();
+        CBLPlayerListManager.cacheWarmed = true;
+      }
+      
       await CBLPlayerListManager.processPlayerList();
     }else{
       if(CBLPlayerListManager.listObserver) {
@@ -873,27 +1429,71 @@ const MainUpdater = {
     }
   },
 
-  isOnServerRCONPage(){ return /\/rcon\/servers\/\d+(?:\/.*)?$/.test(location.href); },
+  isOnServerRCONPage(){ 
+    return /\/rcon\/servers\/\d+(?:\/.*)?$/.test(location.href); 
+  },
+  
   handlePlayerInterface(){
-    const onPlayer=!!document.querySelector(SELECTORS.playerPage);
+    const onPlayer = !!document.querySelector(SELECTORS.playerPage);
     if(onPlayer){
       Utils.ensureElement("copy-button",()=>UIComponents.createPlayerButtons());
-      const m=location.href.match(/players\/(\d+)/); const pid=m?m[1]:null; const steamID=Utils.getTextByTitle("765","");
-      const key=pid||steamID||null;
-      if(key && key!==this.lastPlayerKey){ this.lastPlayerKey=key; Utils.removeElement("CBL-info"); this.fetchCBLData(); }
-      else{ Utils.ensureElement("CBL-info",()=>this.fetchCBLData()); }
+      const m = location.href.match(/players\/(\d+)/); 
+      const pid = m?m[1]:null; 
+      const steamID = Utils.getTextByTitle("765","");
+      const key = pid||steamID||null;
+      if(key && key!==this.lastPlayerKey){ 
+        this.lastPlayerKey = key; 
+        Utils.removeElement("CBL-info"); 
+        this.fetchCBLData(); 
+      }
+      else{ 
+        Utils.ensureElement("CBL-info",()=>this.fetchCBLData()); 
+      }
     }else{
-      ["copy-button","open-url-button","CBL-info"].forEach(id=>Utils.removeElement(id)); this.lastPlayerKey=null;
+      ["copy-button","open-url-button","CBL-info"].forEach(id=>Utils.removeElement(id)); 
+      this.lastPlayerKey = null;
     }
   },
-  async fetchCBLData(){ const steamID=Utils.getTextByTitle("765","SteamID MISSING?"); await CBLManager.fetchPlayerData(steamID); }
+  
+  async fetchCBLData(){ 
+    const steamID = Utils.getTextByTitle("765","SteamID MISSING?"); 
+    await CBLManager.fetchPlayerData(steamID); 
+  },
+
+  // NEW: Periodic cache cleanup to prevent memory leaks
+  maybeCleanupCache() {
+    const now = Date.now();
+    if (now - this.lastCacheCleanup > this.cacheCleanupInterval) {
+      this.lastCacheCleanup = now;
+      
+      try {
+        CBLPlayerListManager.cleanupOldCache();
+        AdminBadgeDecorator.cleanupCache();
+        console.log('Periodic cache cleanup completed');
+      } catch (e) {
+        console.warn('Cache cleanup error:', e);
+      }
+    }
+  },
+
+  // NEW: Force refresh all styling (useful for debugging)
+  forceRefreshAll() {
+    try {
+      CBLPlayerListManager.forceRefreshAll();
+      AdminBadgeDecorator.forceRefreshAll();
+      console.log('Force refresh completed');
+    } catch (e) {
+      console.warn('Force refresh error:', e);
+    }
+  }
 };
 
 // ========================================
-// BOOTSTRAP
+// BOOTSTRAP (Enhanced with debugging and global utilities)
 // ========================================
 class BMOverlay {
   constructor(){ this.isInitialized=false; }
+  
   async init(){
     if(this.isInitialized) return;
     console.log("Initializing BattleMetrics Overlay Enhanced...");
@@ -904,11 +1504,18 @@ class BMOverlay {
 
     this.startUpdateLoop();
     this.isInitialized=true;
+    
+    // NEW: Setup global debugging utilities
+    this.setupGlobalUtilities();
+    
     console.log("BattleMetrics Overlay Enhanced initialized successfully");
+    console.log("Debug commands available: Utils.debugCacheStatus(), Utils.forceRefreshAllStyling(), Utils.clearAllCaches()");
   }
+  
   startUpdateLoop(){
     setInterval(async()=>{ try{ await MainUpdater.update(); }catch(e){ console.error("Update loop error:",e); } }, CONFIG.updateRate);
   }
+  
   observeDOM(){
     const obs=new MutationObserver(()=> {
       const ready=[".ReactVirtualized__Grid__innerScrollContainer",".navbar-brand"].some(sel=>document.querySelector(sel));
@@ -916,7 +1523,38 @@ class BMOverlay {
     });
     obs.observe(document.body,{childList:true,subtree:true,attributes:true});
   }
+  
+  // NEW: Setup global utilities for debugging
+  setupGlobalUtilities() {
+    // Make debugging functions available globally
+    window.DMH_DEBUG = {
+      cacheStatus: () => Utils.debugCacheStatus(),
+      forceRefresh: () => Utils.forceRefreshAllStyling(),
+      clearCaches: () => Utils.clearAllCaches(),
+      forceRefreshAll: () => MainUpdater.forceRefreshAll(),
+      getCacheInfo: () => ({
+        cblCache: CBLPlayerListManager.cblCache.size,
+        adminCache: AdminBadgeDecorator.adminCache.size,
+        elementCache: CBLPlayerListManager.elementCache.size,
+        processedSteamIDs: CBLPlayerListManager.processedSteamIDs.size
+      }),
+      // NEW: Persistent storage utilities
+      persistentStorage: {
+        save: () => PersistentStorage.saveCache(),
+        load: () => PersistentStorage.loadCache(),
+        clear: () => PersistentStorage.clearStorage(),
+        stats: () => PersistentStorage.getStats(),
+        warm: () => CBLPlayerListManager.warmCacheFromStorage()
+      },
+      // NEW: Cache warming utilities
+      warmCache: () => CBLPlayerListManager.warmCacheFromStorage(),
+      enableAggressive: () => CBLPlayerListManager.enableAggressiveCaching()
+    };
+    
+    console.log("Global debug utilities available: window.DMH_DEBUG");
+    console.log("Persistent storage utilities: window.DMH_DEBUG.persistentStorage");
+  }
 }
 
-const overlay=new BMOverlay();
+const overlay = new BMOverlay();
 overlay.observeDOM();
