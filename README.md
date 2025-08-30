@@ -2,15 +2,31 @@
 
 ## 🛡️ Installation Guide
 
-This userscript enhances the BattleMetrics RCON interface with color-coded player information, admin badges, CBL (Community Ban List) integration, and quick access buttons.
+This userscript enhances the BattleMetrics RCON interface with color-coded player information, admin badges, CBL (Community Ban List) integration, SquadJS API monitoring, and quick access buttons.
 
 ### ✨ Features
 
+#### Core Enhancements:
 - **CBL Integration**: Automatic Community Ban List lookups with color-coded risk ratings
 - **Admin Badge System**: Cyan highlighting and shield badges for DMH admins
 - **Enhanced RCON Logging**: Color-coded events and actions for better visibility
 - **Quick Access Buttons**: Direct links to SOP, MSG, and Rules documents
 - **Player Information Tools**: One-click copying of player details and CBL lookup
+
+#### NEW - SquadJS API Integration:
+- **Real-time Admin Camera Monitoring**: See which admins are currently in camera mode
+- **Player Alert System**: Get instant notifications for recent player alerts requiring attention
+- **Live Game State Display**: Current map, round info, and match duration
+- **Server Information Panel**: Live player count, server status, and connection info
+- **Multi-Server Support**: Switch between multiple servers with dropdown selector
+- **Audio Alerts**: Optional sound notifications for critical player alerts
+- **Draggable Interface**: Move the monitoring panel anywhere on screen
+
+#### Performance Improvements:
+- **Enhanced Caching**: Persistent storage for faster loading and reduced API calls
+- **Smart Cache Management**: Automatic cleanup and cache warming from localStorage
+- **Optimized Update Intervals**: Reduced from 150ms to 1000ms for better performance
+- **Tiered API Updates**: Different update frequencies for different data types
 
 ---
 
@@ -119,12 +135,20 @@ Some browsers may require enabling developer mode for userscripts to function pr
      - 📋 **SOP** (grey)
      - 💬 **MSG** (green) 
      - 📖 **Rules** (blue)
-     - ⚡ **3.X** (version, black)
+     - ⚡ **2.9** (version, black)
 
-3. **Test CBL Integration**
+3. **Test All Features**
    - Go to the server's player list
    - Player names should be color-coded based on CBL risk ratings
    - Admin players should have cyan highlighting and shield 🛡️ badges
+   - Look for the **SquadJS Monitor Panel** in the top-right area
+   - The monitoring panel should show:
+     - 📹 **Admin Camera Status** (who's currently in camera)
+     - 🚨 **Last Player Alert** (recent admin commands/warnings)
+     - 🎮 **Game State** (current map, round, duration)
+     - 🖥️ **Server Info** (player count, server status)
+   - Test **server switching** with the dropdown in the monitor panel
+   - Try **dragging the monitor panel** to reposition it
 
 ---
 
@@ -165,6 +189,13 @@ Some browsers may require enabling developer mode for userscripts to function pr
 - The script only activates on `battlemetrics.com` domains
 - Try refreshing the page
 
+### SquadJS Monitor Not Working?
+- SquadJS integration requires server-side plugins to be running
+- If you see "Server offline" or "No data available" messages, the SquadJS plugins may not be configured on that server
+- Try switching servers using the dropdown in the monitor panel
+- Check the **API Status** indicator at the bottom of the monitor panel
+- The monitor panel can be **dragged** to reposition it if it's blocking other interface elements
+
 ### CBL Colors Not Showing?
 - CBL integration requires an internet connection
 - Some players may not have CBL history (will show as white/clean)
@@ -172,7 +203,7 @@ Some browsers may require enabling developer mode for userscripts to function pr
 
 ---
 
-## 🎨 Color Guide
+## 🎨 Color Guide & Interface Elements
 
 ### CBL Risk Ratings:
 - **🔴 Red**: High risk (6+ rating) or active bans
@@ -189,6 +220,16 @@ Some browsers may require enabling developer mode for userscripts to function pr
 - **🟡 Yellow**: Team kills
 - **🔵 Blue**: Team assignments
 - **⚫ Grey**: Automated messages and joins/leaves
+
+### NEW - SquadJS Monitor Panel:
+- **📹 Admin Camera**: Shows which admins are currently in camera mode
+- **🚨 Last Player Alert**: Recent admin commands that may require attention (with audio alerts)
+- **🎮 Game State**: Current map, round number, and match duration
+- **🖥️ Server Info**: Live player count and server status
+- **🔗 API Status**: Connection indicator (Green=Connected, Yellow=Stale, Red=Disconnected)
+- **Server Dropdown**: Switch between multiple servers
+- **−/+ Button**: Minimize/maximize the panel
+- **Draggable**: Click and drag the header to reposition anywhere on screen
 
 ---
 
@@ -209,6 +250,25 @@ Some browsers may require enabling developer mode for userscripts to function pr
 - **💬 MSG**: Message/Communication Guidelines  
 - **📖 Rules**: Server Rules
 - **⚡ Version**: Click to check for script updates
+
+### NEW - SquadJS Monitor Panel Usage:
+#### Server Management:
+- **Switch Servers**: Use dropdown in panel header to select different servers
+- **Reposition Panel**: Drag the panel header to move it anywhere on screen
+- **Minimize/Maximize**: Use −/+ button to collapse/expand the panel
+
+#### Monitoring Features:
+- **Admin Camera Tracking**: See real-time list of admins currently in camera mode
+- **Player Alert System**: Get notified of recent admin commands that need attention
+- **Audio Notifications**: Hear alert sounds for critical player events (can be disabled)
+- **Live Game Data**: Monitor current map rotation, round progress, and match duration
+- **Server Health**: Check API connection status and data freshness
+
+#### Alert System:
+- Recent player alerts (within 5 minutes) are highlighted in **orange/yellow**
+- Audio alerts play for new critical events (respects cooldown to prevent spam)
+- Flash notification effect draws attention to new alerts
+- Click alerts to see admin name, timestamp, and message details
 
 ---
 
@@ -250,6 +310,6 @@ If you encounter issues:
 
 ---
 
-**Version**: 3.X  
+**Version**: 3.6  
 **Last Updated**: 2025  
 **Compatibility**: Chrome, Firefox, Edge, Opera, Safari (with Tampermonkey)
