@@ -2,7 +2,7 @@
 
 ## 🛡️ Installation Guide
 
-This userscript enhances the BattleMetrics RCON interface with color-coded player information, admin badges, CBL (Community Ban List) integration, SquadJS API monitoring, and quick access buttons.
+This userscript enhances the BattleMetrics RCON interface with color-coded player information, admin badges, CBL (Community Ban List) integration, real-time DMH server monitoring, and quick access buttons.
 
 ### ✨ Features
 
@@ -13,20 +13,54 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
 - **Quick Access Buttons**: Direct links to SOP, MSG, and Rules documents
 - **Player Information Tools**: One-click copying of player details and CBL lookup
 
-#### NEW - SquadJS API Integration:
-- **Real-time Admin Camera Monitoring**: See which admins are currently in camera mode
-- **Player Alert System**: Get instant notifications for recent player alerts requiring attention
-- **Live Game State Display**: Current map, round info, and match duration
-- **Server Information Panel**: Live player count, server status, and connection info
-- **Multi-Server Support**: Switch between multiple servers with dropdown selector
-- **Audio Alerts**: Optional sound notifications for critical player alerts
+#### NEW - DMH Server Monitor (Real-time):
+- **Discord Authentication**: Secure login system using Discord OAuth
+- **Real-time Admin Camera Monitoring**: See which DMH admins are currently in camera mode
+- **Player Alert System**: Get instant notifications for !admin commands requiring attention
+- **Alert History**: Keep track of multiple recent player alerts with timestamps
+- **Audio Notifications**: Optional sound alerts for critical player events
 - **Draggable Interface**: Move the monitoring panel anywhere on screen
+- **WebSocket Connection**: Live updates via secure WebSocket connection
+- **Persistent Storage**: Automatically saves and restores cache data
 
 #### Performance Improvements:
 - **Enhanced Caching**: Persistent storage for faster loading and reduced API calls
 - **Smart Cache Management**: Automatic cleanup and cache warming from localStorage
 - **Optimized Update Intervals**: Reduced from 150ms to 1000ms for better performance
-- **Tiered API Updates**: Different update frequencies for different data types
+- **Secure Authentication**: JWT-based session management with automatic refresh
+
+## 🔐 Authentication Guide (NEW)
+
+The DMH Server Monitor requires Discord authentication to access real-time server data.
+
+### First-Time Setup:
+1. **Install the Script** following the steps above
+2. Navigate to any **DMH BattleMetrics server page** (e.g., `https://www.battlemetrics.com/servers/squad/XXXXX`)
+3. Look for the **DMH Server Monitor** panel (usually top-left corner)
+4. Click the **🔐 Login** button in the panel
+5. You'll be redirected to Discord OAuth - **authorize the application**
+6. After authorization, you'll be redirected back to BattleMetrics
+7. **Please be patient** - the connection process may take a moment to complete
+8. The panel will show **"Login required"** while establishing the connection
+9. Wait up to **30 seconds** for the WebSocket connection to establish
+10. The panel should now show **live data** (admin camera status, player alerts)
+
+### Authentication Details:
+- **Secure OAuth Flow**: Uses Discord OAuth 2.0 for secure authentication
+- **No Passwords Stored**: Your Discord credentials are never stored by the script
+- **Automatic Session Management**: Sessions are automatically refreshed when possible
+- **Persistent Login**: You only need to login once - sessions persist across browser restarts
+
+### Troubleshooting Authentication:
+- **"Login required" message**: Click the 🔐 button to authenticate
+- **Redirect fails**: Ensure popups are allowed for `battlemetrics.com`
+- **Session expired**: Click the 🔐 button again to refresh your session
+- **No data after login**: Wait 10-15 seconds for the WebSocket connection to establish
+
+### What Data is Accessed:
+- **Your Discord username** (for identification)
+- **DMH server membership** (to verify access permissions)
+- **No message history or personal data** is accessed or stored
 
 ---
 
@@ -141,14 +175,12 @@ Some browsers may require enabling developer mode for userscripts to function pr
    - Go to the server's player list
    - Player names should be color-coded based on CBL risk ratings
    - Admin players should have cyan highlighting and shield 🛡️ badges
-   - Look for the **SquadJS Monitor Panel** in the top-right area
+   - Look for the **DMH Server Monitor** panel in the top-left area
    - The monitoring panel should show:
-     - 📹 **Admin Camera Status** (who's currently in camera)
-     - 🚨 **Last Player Alert** (recent admin commands/warnings)
-     - 🎮 **Game State** (current map, round, duration)
-     - 🖥️ **Server Info** (player count, server status)
-   - Test **server switching** with the dropdown in the monitor panel
-   - Try **dragging the monitor panel** to reposition it
+     - 📹 **Admin Camera** (which DMH admins are currently in camera)
+     - ⚠️ **Player Alerts** (recent !admin commands requiring attention)
+     - 📡 **API Status** (connection status and type)
+   - Test **panel dragging** to reposition it anywhere on screen
 
 ---
 
@@ -221,13 +253,18 @@ Some browsers may require enabling developer mode for userscripts to function pr
 - **🔵 Blue**: Team assignments
 - **⚫ Grey**: Automated messages and joins/leaves
 
-### NEW - SquadJS Monitor Panel:
-- **📹 Admin Camera**: Shows which admins are currently in camera mode
-- **🚨 Last Player Alert**: Recent admin commands that may require attention (with audio alerts)
-- **🎮 Game State**: Current map, round number, and match duration
-- **🖥️ Server Info**: Live player count and server status
-- **🔗 API Status**: Connection indicator (Green=Connected, Yellow=Stale, Red=Disconnected)
-- **Server Dropdown**: Switch between multiple servers
+### NEW - DMH Server Monitor Panel:
+- **📹 Admin Camera**: Shows which DMH admins are currently in camera mode (real-time)
+- **⚠️ Player Alerts**: Recent !admin commands that require attention (with timestamps)
+- **Alert History**: Scrollable list of recent player alerts with automatic expiration
+- **🔊/🔇 Audio Toggle**: Enable/disable sound notifications for new alerts
+- **📡 API Status**: Real-time connection indicator
+  - **WebSocket (Real-time)** = Live connection with instant updates
+  - **Login required** = Need Discord authentication
+  - **Error - Reconnecting** = Connection issues, auto-retrying
+- **🔐 Login Button**: Discord OAuth authentication for accessing live data
+- **🐛 Debug Button**: System information and troubleshooting
+- **💝 Credits**: Contributors and development team
 - **−/+ Button**: Minimize/maximize the panel
 - **Draggable**: Click and drag the header to reposition anywhere on screen
 
@@ -251,24 +288,30 @@ Some browsers may require enabling developer mode for userscripts to function pr
 - **📖 Rules**: Server Rules
 - **⚡ Version**: Click to check for script updates
 
-### NEW - SquadJS Monitor Panel Usage:
-#### Server Management:
-- **Switch Servers**: Use dropdown in panel header to select different servers
+### NEW - DMH Server Monitor Usage:
+#### Authentication & Setup:
+- **Discord Login**: Click 🔐 to authenticate via Discord OAuth
+- **Automatic Detection**: Server ID is detected from the BattleMetrics URL
+- **Session Management**: Login persists across browser sessions
+
+#### Panel Management:
 - **Reposition Panel**: Drag the panel header to move it anywhere on screen
 - **Minimize/Maximize**: Use −/+ button to collapse/expand the panel
+- **Persistent Position**: Panel position is automatically saved and restored
 
 #### Monitoring Features:
-- **Admin Camera Tracking**: See real-time list of admins currently in camera mode
-- **Player Alert System**: Get notified of recent admin commands that need attention
-- **Audio Notifications**: Hear alert sounds for critical player events (can be disabled)
-- **Live Game Data**: Monitor current map rotation, round progress, and match duration
-- **Server Health**: Check API connection status and data freshness
+- **Admin Camera Tracking**: See real-time list of DMH admins currently in camera mode
+- **Player Alert System**: Get notified of !admin commands that need attention
+- **Alert History**: View scrollable history of recent player alerts
+- **Audio Notifications**: Hear alert sounds for critical player events
+- **Real-time Updates**: WebSocket connection provides instant data updates
 
 #### Alert System:
-- Recent player alerts (within 5 minutes) are highlighted in **orange/yellow**
-- Audio alerts play for new critical events (respects cooldown to prevent spam)
+- Recent player alerts (within 20 minutes) are shown with timestamps
+- Audio alerts play for new !admin commands (can be toggled on/off)
 - Flash notification effect draws attention to new alerts
-- Click alerts to see admin name, timestamp, and message details
+- Alert history automatically expires after 20 minutes
+- Multiple alerts are tracked and displayed in chronological order
 
 ---
 
@@ -310,6 +353,6 @@ If you encounter issues:
 
 ---
 
-**Version**: 3.6  
+**Version**: 3.7  
 **Last Updated**: 2025  
 **Compatibility**: Chrome, Firefox, Edge, Opera, Safari (with Tampermonkey)
