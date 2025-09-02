@@ -16,12 +16,14 @@ This userscript enhances the BattleMetrics RCON interface with color-coded playe
 #### NEW - DMH Server Monitor (Real-time):
 - **Discord Authentication**: Secure login system using Discord OAuth
 - **Real-time Admin Camera Monitoring**: See which DMH admins are currently in camera mode
-- **Player Alert System**: Get instant notifications for !admin commands requiring attention
-- **Alert History**: Keep track of multiple recent player alerts with timestamps
-- **Audio Notifications**: Optional sound alerts for critical player events
-- **Draggable Interface**: Move the monitoring panel anywhere on screen
+- **Enhanced Player Alert System**: Get instant notifications for !admin commands with scrollable history
+- **Alert History Management**: View, scroll through, and clear recent player alerts (20-minute expiration)
+- **Audio Notifications**: Optional sound alerts for critical player events with toggle control
+- **Quick Links Integration**: Built-in access to SOP, MSG, Rules, and version info
+- **Advanced UI Controls**: Collapsible sections, dropdown menus, and enhanced navigation
+- **Draggable Interface**: Move the monitoring panel anywhere on screen with position memory
 - **WebSocket Connection**: Live updates via secure WebSocket connection
-- **Persistent Storage**: Automatically saves and restores cache data
+- **Persistent Storage**: Automatically saves and restores cache data and panel settings
 
 #### Performance Improvements:
 - **Enhanced Caching**: Persistent storage for faster loading and reduced API calls
@@ -255,8 +257,13 @@ Some browsers may require enabling developer mode for userscripts to function pr
 
 ### NEW - DMH Server Monitor Panel:
 - **📹 Admin Camera**: Shows which DMH admins are currently in camera mode (real-time)
-- **⚠️ Player Alerts**: Recent !admin commands that require attention (with timestamps)
-- **Alert History**: Scrollable list of recent player alerts with automatic expiration
+- **⚠️ Player Alerts**: Recent !admin commands with expandable history dropdown
+- **Alert Management**: 
+  - **▼/▲ Dropdown Arrow**: Click to show/hide alert history
+  - **Alert History**: Scrollable list of recent alerts with timestamps
+  - **🗑️ Clear History**: Button to clear all stored alerts
+  - **Automatic Expiration**: Alerts expire after 20 minutes
+- **🔗 Quick Links**: Built-in access buttons for SOP, MSG, Rules, and version info
 - **🔊/🔇 Audio Toggle**: Enable/disable sound notifications for new alerts
 - **📡 API Status**: Real-time connection indicator
   - **WebSocket (Real-time)** = Live connection with instant updates
@@ -266,7 +273,7 @@ Some browsers may require enabling developer mode for userscripts to function pr
 - **🐛 Debug Button**: System information and troubleshooting
 - **💝 Credits**: Contributors and development team
 - **−/+ Button**: Minimize/maximize the panel
-- **Draggable**: Click and drag the header to reposition anywhere on screen
+- **Draggable**: Click and drag the header to reposition anywhere on screen with automatic position saving
 
 ---
 
@@ -296,22 +303,25 @@ Some browsers may require enabling developer mode for userscripts to function pr
 
 #### Panel Management:
 - **Reposition Panel**: Drag the panel header to move it anywhere on screen
+- **Position Memory**: Panel position is automatically saved and restored
 - **Minimize/Maximize**: Use −/+ button to collapse/expand the panel
-- **Persistent Position**: Panel position is automatically saved and restored
+- **Collapsed State**: Panel remembers if it was minimized between sessions
 
-#### Monitoring Features:
-- **Admin Camera Tracking**: See real-time list of DMH admins currently in camera mode
-- **Player Alert System**: Get notified of !admin commands that need attention
-- **Alert History**: View scrollable history of recent player alerts
-- **Audio Notifications**: Hear alert sounds for critical player events
-- **Real-time Updates**: WebSocket connection provides instant data updates
+#### Enhanced Alert System:
+- **Alert Display**: Latest !admin command shown with player name and timestamp
+- **Alert History Dropdown**: Click ▼ arrow to expand/collapse alert history
+- **Scrollable History**: View up to 10 recent alerts with automatic scrolling
+- **Alert Management**: Use 🗑️ button to clear all stored alert history
+- **Real-time Updates**: New alerts appear instantly via WebSocket connection
+- **Audio Notifications**: Toggle sound alerts on/off with 🔊/🔇 button
+- **Flash Notifications**: Visual flash effect draws attention to new alerts
+- **Automatic Expiration**: Alert history automatically cleans up after 20 minutes
+- **Smart Deduplication**: Prevents duplicate alerts from the same admin command
 
-#### Alert System:
-- Recent player alerts (within 20 minutes) are shown with timestamps
-- Audio alerts play for new !admin commands (can be toggled on/off)
-- Flash notification effect draws attention to new alerts
-- Alert history automatically expires after 20 minutes
-- Multiple alerts are tracked and displayed in chronological order
+#### Quick Access Features:
+- **Integrated Quick Links**: Built-in buttons for SOP, MSG, Rules, and version
+- **One-Click Access**: No need for separate corner buttons - everything in the panel
+- **Visual Feedback**: Hover effects and animations for better user experience
 
 ---
 
