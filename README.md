@@ -4,65 +4,14 @@
 
 This userscript enhances the BattleMetrics RCON interface with color-coded player information, admin badges, CBL (Community Ban List) integration, real-time DMH server monitoring, and quick access buttons.
 
-### ✨ Features
+### ✨ Core Features
 
-#### Core Enhancements:
 - **CBL Integration**: Automatic Community Ban List lookups with color-coded risk ratings
 - **Admin Badge System**: Cyan highlighting and shield badges for DMH admins
 - **Enhanced RCON Logging**: Color-coded events and actions for better visibility
-- **Quick Access Buttons**: Direct links to SOP, MSG, and Rules documents
 - **Player Information Tools**: One-click copying of player details and CBL lookup
-
-#### NEW - DMH Server Monitor (Real-time):
-- **Discord Authentication**: Secure login system using Discord OAuth
-- **Real-time Admin Camera Monitoring**: See which DMH admins are currently in camera mode
-- **Enhanced Player Alert System**: Get instant notifications for !admin commands with scrollable history
-- **Alert History Management**: View, scroll through, and clear recent player alerts (20-minute expiration)
-- **Audio Notifications**: Optional sound alerts for critical player events with toggle control
-- **Quick Links Integration**: Built-in access to SOP, MSG, Rules, and version info
-- **Advanced UI Controls**: Collapsible sections, dropdown menus, and enhanced navigation
-- **Draggable Interface**: Move the monitoring panel anywhere on screen with position memory
-- **WebSocket Connection**: Live updates via secure WebSocket connection
-- **Persistent Storage**: Automatically saves and restores cache data and panel settings
-
-#### Performance Improvements:
-- **Enhanced Caching**: Persistent storage for faster loading and reduced API calls
-- **Smart Cache Management**: Automatic cleanup and cache warming from localStorage
-- **Optimized Update Intervals**: Reduced from 150ms to 1000ms for better performance
-- **Secure Authentication**: JWT-based session management with automatic refresh
-
-## 🔐 Authentication Guide (NEW)
-
-The DMH Server Monitor requires Discord authentication to access real-time server data.
-
-### First-Time Setup:
-1. **Install the Script** following the steps above
-2. Navigate to any **DMH BattleMetrics server page** (e.g., `https://www.battlemetrics.com/servers/squad/XXXXX`)
-3. Look for the **DMH Server Monitor** panel (usually top-left corner)
-4. Click the **🔐 Login** button in the panel
-5. You'll be redirected to Discord OAuth - **authorize the application**
-6. After authorization, you'll be redirected back to BattleMetrics
-7. **Please be patient** - the connection process may take a moment to complete
-8. The panel will show **"Login required"** while establishing the connection
-9. Wait up to **30 seconds** for the WebSocket connection to establish
-10. The panel should now show **live data** (admin camera status, player alerts)
-
-### Authentication Details:
-- **Secure OAuth Flow**: Uses Discord OAuth 2.0 for secure authentication
-- **No Passwords Stored**: Your Discord credentials are never stored by the script
-- **Automatic Session Management**: Sessions are automatically refreshed when possible
-- **Persistent Login**: You only need to login once - sessions persist across browser restarts
-
-### Troubleshooting Authentication:
-- **"Login required" message**: Click the 🔐 button to authenticate
-- **Redirect fails**: Ensure popups are allowed for `battlemetrics.com`
-- **Session expired**: Click the 🔐 button again to refresh your session
-- **No data after login**: Wait 10-15 seconds for the WebSocket connection to establish
-
-### What Data is Accessed:
-- **Your Discord username** (for identification)
-- **DMH server membership** (to verify access permissions)
-- **No message history or personal data** is accessed or stored
+- **DMH Server Monitor**: Real-time admin camera tracking and player alert system
+- **Performance Optimizations**: Enhanced caching and persistent storage
 
 ---
 
@@ -154,7 +103,7 @@ Some browsers may require enabling developer mode for userscripts to function pr
    - Or click **File > Save**
 
 ### Method 2: Direct Link Installation
-1. Click this link: [Install DMH Overlay](https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay.js)
+1. Click this link: [Install DMH Overlay](https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js)
 2. Tampermonkey should automatically detect the script
 3. Click **"Install"** in the popup
 
@@ -164,25 +113,97 @@ Some browsers may require enabling developer mode for userscripts to function pr
 
 1. **Navigate to BattleMetrics**
    - Go to [battlemetrics.com](https://www.battlemetrics.com)
-   - Open any server's RCON panel
+   - Open any DMH server page
 
-2. **Look for the Enhancement Buttons**
-   - You should see buttons in the top-right area:
-     - 📋 **SOP** (grey)
-     - 💬 **MSG** (green) 
-     - 📖 **Rules** (blue)
-     - ⚡ **2.9** (version, black)
+2. **Look for the Enhancement Features**
+   - **DMH Server Monitor Panel**: Should appear in the top-left area
+   - **Color-coded player names** in RCON player lists
+   - **Admin badges** (cyan highlighting with shield icons)
 
-3. **Test All Features**
+3. **Test Core Features**
    - Go to the server's player list
    - Player names should be color-coded based on CBL risk ratings
    - Admin players should have cyan highlighting and shield 🛡️ badges
-   - Look for the **DMH Server Monitor** panel in the top-left area
-   - The monitoring panel should show:
-     - 📹 **Admin Camera** (which DMH admins are currently in camera)
-     - ⚠️ **Player Alerts** (recent !admin commands requiring attention)
-     - 📡 **API Status** (connection status and type)
-   - Test **panel dragging** to reposition it anywhere on screen
+
+---
+
+## 🔐 DMH Server Monitor Authentication
+
+The DMH Server Monitor requires Discord authentication to access real-time server data.
+
+### First-Time Setup:
+1. **Install the Script** following the steps above
+2. Navigate to any **DMH BattleMetrics server page** (e.g., `https://www.battlemetrics.com/servers/squad/XXXXX`)
+3. Look for the **DMH Server Monitor** panel (usually top-left corner)
+4. Click the **🔐 Login** button in the panel
+5. You'll be redirected to Discord OAuth - **authorize the application**
+6. After authorization, you'll be redirected back to BattleMetrics
+7. **Please be patient** - the connection process may take a moment to complete
+8. The panel will show **"Login required"** while establishing the connection
+9. Wait up to **30 seconds** for the WebSocket connection to establish
+10. The panel should now show **live data** (admin camera status, player alerts)
+
+### Authentication Details:
+- **Secure OAuth Flow**: Uses Discord OAuth 2.0 for secure authentication
+- **No Passwords Stored**: Your Discord credentials are never stored by the script
+- **Automatic Session Management**: Sessions are automatically refreshed when possible
+- **Persistent Login**: You only need to login once - sessions persist across browser restarts
+
+### What Data is Accessed:
+- **Your Discord username** (for identification)
+- **DMH server membership** (to verify access permissions)
+- **No message history or personal data** is accessed or stored
+
+---
+
+## 🎨 Interface Guide
+
+### CBL Risk Ratings:
+- **🔴 Red**: High risk (6+ rating) or active bans
+- **🟠 Orange**: Medium-high risk (3-5 rating)  
+- **🟡 Yellow**: Low risk (1-2 rating)
+- **⚪ White**: Clean (no CBL history)
+
+### Admin Indicators:
+- **🔵 Cyan Background**: DMH Admin with 🛡️ shield badge
+
+### Action Log Colors:
+- **🟢 Green**: Admin actions
+- **🔴 Red**: Moderation actions (kicks, bans, warnings)
+- **🟡 Yellow**: Team kills
+- **🔵 Blue**: Team assignments
+- **⚫ Grey**: Automated messages and joins/leaves
+
+### DMH Server Monitor Panel:
+- **📹 Admin Camera**: Shows which DMH admins are currently in camera mode
+- **⚠️ Player Alerts**: Recent !admin commands with expandable history
+- **▼/▲ Dropdown Arrow**: Click to show/hide alert history
+- **🗑️ Clear History**: Button to clear all stored alerts
+- **🔊/🔇 Audio Toggle**: Enable/disable sound notifications
+- **📡 API Status**: Connection indicator (WebSocket/Login required/Error)
+- **🔗 Quick Links**: Built-in SOP, MSG, Rules, and version buttons
+- **🔐 Login**: Discord OAuth authentication
+- **🐛 Debug**: System information and troubleshooting
+- **💝 Credits**: Development team information
+- **−/+ Button**: Minimize/maximize the panel
+- **Draggable**: Move panel anywhere with automatic position saving
+
+---
+
+## 📝 Usage Tips
+
+### Player Information:
+1. Click on any player in the RCON interface
+2. Click the **📋 Copy Player Info** button (player info is copied to clipboard)
+3. Click the **🔍 Open CBL** button (opens Community Ban List profile)
+
+### DMH Server Monitor:
+- **Authentication**: Click 🔐 to login with Discord OAuth
+- **Panel Position**: Drag the header to move it anywhere on screen
+- **Alert History**: Click ▼ arrow to expand/collapse recent alerts
+- **Audio Control**: Toggle 🔊/🔇 to enable/disable alert sounds
+- **Quick Access**: Use built-in buttons for SOP, MSG, Rules, and updates
+- **Alert Management**: Click 🗑️ to clear stored alert history
 
 ---
 
@@ -204,124 +225,26 @@ Some browsers may require enabling developer mode for userscripts to function pr
    - Click the Tampermonkey icon
    - Ensure it shows "ON" (not "OFF")
 
-2. **Verify Script is Active**
+4. **Verify Script is Active**
    - Open Tampermonkey Dashboard
-   - Find "DMH BattleMetrics Overlay Enhanced"
+   - Find "DMH BattleMetrics Overlay"
    - Toggle should be **green/enabled**
 
-3. **Clear Browser Cache**
+5. **Clear Browser Cache**
    - Press **Ctrl+Shift+R** (or **Cmd+Shift+R** on Mac)
    - Or clear your browser's cache manually
 
-4. **Check Console for Errors**
-   - Press **F12** to open Developer Tools
-   - Go to **Console** tab
-   - Look for any red error messages
-
-### Buttons Not Appearing?
-- Make sure you're on a BattleMetrics RCON page
-- The script only activates on `battlemetrics.com` domains
-- Try refreshing the page
-
-### SquadJS Monitor Not Working?
-- SquadJS integration requires server-side plugins to be running
-- If you see "Server offline" or "No data available" messages, the SquadJS plugins may not be configured on that server
-- Try switching servers using the dropdown in the monitor panel
-- Check the **API Status** indicator at the bottom of the monitor panel
-- The monitor panel can be **dragged** to reposition it if it's blocking other interface elements
+### DMH Server Monitor Issues?
+- **Authentication Required**: Click the **🔐 Login** button to authenticate
+- **Connection Status**: Check the "API Status" section in the monitor panel
+- **Session Expired**: Click the 🔐 button to refresh your authentication
+- **Panel Missing**: Only works on **DMH BattleMetrics server pages**
+- **No Data**: Wait up to 30 seconds for WebSocket connection after login
 
 ### CBL Colors Not Showing?
 - CBL integration requires an internet connection
 - Some players may not have CBL history (will show as white/clean)
 - Check browser console for any network errors
-
----
-
-## 🎨 Color Guide & Interface Elements
-
-### CBL Risk Ratings:
-- **🔴 Red**: High risk (6+ rating) or active bans
-- **🟠 Orange**: Medium-high risk (3-5 rating)  
-- **🟡 Yellow**: Low risk (1-2 rating)
-- **⚪ White**: Clean (no CBL history)
-
-### Admin Indicators:
-- **🔵 Cyan Background**: DMH Admin with 🛡️ shield badge
-
-### Action Log Colors:
-- **🟢 Green**: Admin actions
-- **🔴 Red**: Moderation actions (kicks, bans, warnings)
-- **🟡 Yellow**: Team kills
-- **🔵 Blue**: Team assignments
-- **⚫ Grey**: Automated messages and joins/leaves
-
-### NEW - DMH Server Monitor Panel:
-- **📹 Admin Camera**: Shows which DMH admins are currently in camera mode (real-time)
-- **⚠️ Player Alerts**: Recent !admin commands with expandable history dropdown
-- **Alert Management**: 
-  - **▼/▲ Dropdown Arrow**: Click to show/hide alert history
-  - **Alert History**: Scrollable list of recent alerts with timestamps
-  - **🗑️ Clear History**: Button to clear all stored alerts
-  - **Automatic Expiration**: Alerts expire after 20 minutes
-- **🔗 Quick Links**: Built-in access buttons for SOP, MSG, Rules, and version info
-- **🔊/🔇 Audio Toggle**: Enable/disable sound notifications for new alerts
-- **📡 API Status**: Real-time connection indicator
-  - **WebSocket (Real-time)** = Live connection with instant updates
-  - **Login required** = Need Discord authentication
-  - **Error - Reconnecting** = Connection issues, auto-retrying
-- **🔐 Login Button**: Discord OAuth authentication for accessing live data
-- **🐛 Debug Button**: System information and troubleshooting
-- **💝 Credits**: Contributors and development team
-- **−/+ Button**: Minimize/maximize the panel
-- **Draggable**: Click and drag the header to reposition anywhere on screen with automatic position saving
-
----
-
-## 📝 Usage Tips
-
-### Quick Player Info Copy:
-1. Click on any player in the RCON interface
-2. Click the **📋 Copy Player Info** button
-3. Information is copied to clipboard in Discord-friendly format
-
-### CBL Lookup:
-1. Click on any player in the RCON interface  
-2. Click the **🔍 Open CBL** button
-3. Opens the player's Community Ban List profile in a new tab
-
-### Document Access:
-- **📋 SOP**: Standard Operating Procedures
-- **💬 MSG**: Message/Communication Guidelines  
-- **📖 Rules**: Server Rules
-- **⚡ Version**: Click to check for script updates
-
-### NEW - DMH Server Monitor Usage:
-#### Authentication & Setup:
-- **Discord Login**: Click 🔐 to authenticate via Discord OAuth
-- **Automatic Detection**: Server ID is detected from the BattleMetrics URL
-- **Session Management**: Login persists across browser sessions
-
-#### Panel Management:
-- **Reposition Panel**: Drag the panel header to move it anywhere on screen
-- **Position Memory**: Panel position is automatically saved and restored
-- **Minimize/Maximize**: Use −/+ button to collapse/expand the panel
-- **Collapsed State**: Panel remembers if it was minimized between sessions
-
-#### Enhanced Alert System:
-- **Alert Display**: Latest !admin command shown with player name and timestamp
-- **Alert History Dropdown**: Click ▼ arrow to expand/collapse alert history
-- **Scrollable History**: View up to 10 recent alerts with automatic scrolling
-- **Alert Management**: Use 🗑️ button to clear all stored alert history
-- **Real-time Updates**: New alerts appear instantly via WebSocket connection
-- **Audio Notifications**: Toggle sound alerts on/off with 🔊/🔇 button
-- **Flash Notifications**: Visual flash effect draws attention to new alerts
-- **Automatic Expiration**: Alert history automatically cleans up after 20 minutes
-- **Smart Deduplication**: Prevents duplicate alerts from the same admin command
-
-#### Quick Access Features:
-- **Integrated Quick Links**: Built-in buttons for SOP, MSG, Rules, and version
-- **One-Click Access**: No need for separate corner buttons - everything in the panel
-- **Visual Feedback**: Hover effects and animations for better user experience
 
 ---
 
@@ -339,7 +262,7 @@ The script includes auto-update functionality:
    - Click **"Check for updates"**
 
 3. **Version Information**
-   - Current version is displayed on the ⚡ button
+   - Current version is displayed in the Quick Links section of the monitor panel
    - Click the version button to view the latest script file
 
 ---
@@ -349,8 +272,9 @@ The script includes auto-update functionality:
 If you encounter issues:
 
 1. **Check this README** for common solutions
-2. **Report Issues** on the GitHub repository
-3. **Contact DMH Staff** in Discord for server-specific questions
+2. **Use Debug Button** (🐛) in the monitor panel for system information
+3. **Report Issues** on the GitHub repository
+4. **Contact DMH Staff** in Discord for server-specific questions
 
 ---
 
@@ -358,7 +282,8 @@ If you encounter issues:
 
 - This script only modifies the visual interface of BattleMetrics
 - CBL data is fetched from public APIs
-- No personal data is collected or transmitted
+- Discord authentication uses standard OAuth 2.0 protocols
+- No personal data is collected or transmitted beyond Discord username
 - Script operates entirely in your browser
 
 ---
