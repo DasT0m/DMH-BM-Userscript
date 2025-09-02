@@ -1,8 +1,8 @@
 // File: DMH Overlay Enhanced.js
 // ==UserScript==
-// @name DMH BattleMetrics Overlay - Enhanced
+// @name DMH BattleMetrics Overlay
 // @namespace https://www.battlemetrics.com/
-// @version 3.5
+// @version 3.7
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
@@ -11,17 +11,333 @@
 // @match https://www.battlemetrics.com
 // @icon https://www.google.com/s2/favicons?sz=64&domain=battlemetrics.com
 // @grant GM_addStyle
+// @grant GM_setValue
+// @grant GM_getValue
 // @connect communitybanlist.com
 // @connect raw.githubusercontent.com
+// @connect *.workers.dev
 // @run-at document-end
 // ==/UserScript==
+
+// ========================================
+// DMH DISCORD AUTH HELPER
+// ========================================
+const DMH_AUTH = {
+  workerOrigin: "https://squadjs-admin-monitor-worker.itsdast0m.workers.dev",
+  
+  // Storage keys for local storage
+  JWT_KEY: "dmh_jwt_token",
+  REFRESH_KEY: "dmh_refresh_token",
+  EXP_KEY: "dmh_jwt_expires",
+  
+  // Get JWT token from storage
+  get token() { 
+    return localStorage.getItem(this.JWT_KEY); 
+  },
+  
+  // Get refresh token from storage
+  get refreshToken() { 
+    return localStorage.getItem(this.REFRESH_KEY); 
+  },
+  
+  // Get JWT expiration from storage
+  get exp() { 
+    const exp = localStorage.getItem(this.EXP_KEY);
+    return exp ? parseInt(exp) : 0;
+  },
+  
+  // Check if JWT is valid (with 5 minute buffer)
+  isValid() { 
+    return this.token && Date.now() < (this.exp - 300_000); 
+  },
+
+  // Get bearer token for API calls
+  bearer() { 
+    return this.token ? `Bearer ${this.token}` : null; 
+  },
+  
+  // Store tokens in localStorage
+  storeTokens(jwt, refreshToken, expiresAt) {
+    localStorage.setItem(this.JWT_KEY, jwt);
+    localStorage.setItem(this.REFRESH_KEY, refreshToken);
+    localStorage.setItem(this.EXP_KEY, expiresAt.toString());
+  },
+  
+  // Clear tokens from localStorage
+  clearTokens() {
+    localStorage.removeItem(this.JWT_KEY);
+    localStorage.removeItem(this.REFRESH_KEY);
+    localStorage.removeItem(this.EXP_KEY);
+  },
+  
+  // Check if we have stored tokens
+  hasStoredTokens() {
+    return this.token && this.refreshToken;
+  },
+  
+  // Cookie helper methods for redirect-based auth
+  getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+  },
+  
+  deleteCookie(name) {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+  },
+
+  async ensureLogin() {
+    // If we have a valid token with comfortable buffer, we're good
+            if (this.isValid()) {
+          return true;
+        }
+
+            // If we have stored tokens but JWT is expired, try to refresh
+        if (this.hasStoredTokens()) {
+          const refreshOk = await this.directTokenRefresh();
+          if (refreshOk) {
+            return true;
+          }
+        }
+
+    // Check URL fragment for redirect-based auth handoff (for initial login)
+    if (location.hash && location.hash.includes('dmh_token=')) {
+      try {
+        const params = new URLSearchParams(location.hash.slice(1));
+        const tok = params.get('dmh_token');
+        const exp = parseInt(params.get('dmh_exp') || '0', 10);
+        const refresh = params.get('dmh_refresh');
+        
+        if (tok && exp && refresh && Date.now() < (exp - 60000)) {
+          // Store both JWT and refresh token
+          this.storeTokens(tok, refresh, exp);
+          history.replaceState(null, '', location.pathname + location.search);
+          return true;
+        }
+      } catch (error) {
+        console.error('[DMH] Error processing redirect hash:', error);
+      }
+    }
+
+    // Check for temporary cookies from redirect-based auth (legacy support)
+    const tempJWT = this.getCookie('DMH_JWT_TEMP');
+    const tempUser = this.getCookie('DMH_USER_TEMP');
+    const tempExp = this.getCookie('DMH_EXP_TEMP');
+    const tempRefresh = this.getCookie('DMH_REFRESH_TEMP');
+    
+            if (tempJWT && tempExp && tempRefresh) {
+          const expiresAt = parseInt(tempExp);
+          if (Date.now() < (expiresAt - 60000)) {
+            this.storeTokens(tempJWT, tempRefresh, expiresAt);
+            this.deleteCookie('DMH_JWT_TEMP');
+            this.deleteCookie('DMH_USER_TEMP');
+            this.deleteCookie('DMH_EXP_TEMP');
+            this.deleteCookie('DMH_REFRESH_TEMP');
+            return true;
+          } else {
+            this.deleteCookie('DMH_JWT_TEMP');
+            this.deleteCookie('DMH_USER_TEMP');
+            this.deleteCookie('DMH_EXP_TEMP');
+            this.deleteCookie('DMH_REFRESH_TEMP');
+          }
+        }
+
+    // Check legacy localStorage handoff
+    const localToken = localStorage.getItem('dmh_session_token');
+    const localExp = localStorage.getItem('dmh_session_expires');
+    const localRefresh = localStorage.getItem('dmh_session_refresh');
+    
+            if (localToken && localExp && localRefresh) {
+          const expiresAt = parseInt(localExp);
+          if (Date.now() < (expiresAt - 60000)) {
+            this.storeTokens(localToken, localRefresh, expiresAt);
+            localStorage.removeItem('dmh_session_token');
+            localStorage.removeItem('dmh_session_expires');
+            localStorage.removeItem('dmh_session_refresh');
+            localStorage.removeItem('dmh_user_info');
+            return true;
+          } else {
+            localStorage.removeItem('dmh_session_token');
+            localStorage.removeItem('dmh_session_expires');
+            localStorage.removeItem('dmh_session_refresh');
+            localStorage.removeItem('dmH_user_info');
+          }
+        }
+
+    // If we get here, no valid tokens found
+    return false;
+  },
+
+  startLogin() {
+    // Redirect to Discord OAuth page with return URL
+    const returnUrl = encodeURIComponent(location.href);
+    const authUrl = `${this.workerOrigin}/auth/start?rt=${returnUrl}`;
+    console.log('[DMH] startLogin called, redirecting to:', authUrl);
+    window.location.href = authUrl;
+  },
+
+  loginPopup() {
+    return new Promise((resolve) => {
+      const w=480,h=640,left=(screen.width-w)/2,top=(screen.height-h)/2;
+      const popup = window.open(`${this.workerOrigin}/auth/start`, "dmh_auth", `width=${w},height=${h},left=${left},top=${top}`);
+      const handler = (ev) => {
+        if (new URL(this.workerOrigin).origin !== ev.origin) return;
+        const { type, token, expiresAt, user, error } = ev.data||{};
+        if (type === "dmh_auth") {
+          window.removeEventListener("message", handler);
+          if (error || !token) return resolve(false);
+          GM_setValue(this.tokenKey, token);
+          GM_setValue(this.expKey,  expiresAt);
+          console.log("[DMH] logged in as", user?.username);
+          resolve(true);
+        }
+      };
+      window.addEventListener("message", handler);
+    });
+  },
+
+  refreshPopup() {
+    return new Promise((resolve) => {
+      const w=400,h=420,left=(screen.width-w)/2,top=(screen.height-h)/2;
+      const popup = window.open(`${this.workerOrigin}/session/refresh`, "dmh_auth_refresh", `width=${w},height=${h},left=${left},top=${top}`);
+      const handler = (ev) => {
+        // Accept from worker origin
+        const { type, token, expiresAt } = ev.data||{};
+        if (type === "dmh_auth") {
+          window.removeEventListener("message", handler);
+          if (!token) return resolve(false);
+          GM_setValue(this.tokenKey, token);
+          GM_setValue(this.expKey,  expiresAt);
+          resolve(true);
+        }
+      };
+      window.addEventListener("message", handler);
+    });
+  }
+  ,
+  // Hidden-iframe based silent refresh used by ensureLogin
+  silentRefresh() {
+    return new Promise((resolve) => {
+      try {
+        const origin = new URL(this.workerOrigin).origin;
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'display:none;width:0;height:0;border:0;';
+        iframe.src = `${this.workerOrigin}/session/refresh`;
+
+        let done = false;
+        const cleanup = (ok) => {
+          if (done) return; done = true;
+          window.removeEventListener('message', onMsg);
+          try { iframe.remove(); } catch {}
+          resolve(!!ok);
+        };
+
+        const onMsg = (ev) => {
+          if (ev.origin !== origin) return;
+          const { type, token, expiresAt } = ev.data || {};
+          if (type === 'dmh_auth' && token && expiresAt) {
+            console.log('[DMH] Received auth message from silent refresh');
+            GM_setValue(this.tokenKey, token);
+            GM_setValue(this.expKey, expiresAt);
+            cleanup(true);
+          }
+        };
+
+        window.addEventListener('message', onMsg);
+        document.documentElement.appendChild(iframe);
+        
+        // Safety timeout - increased from 6s to 10s for slower connections
+        setTimeout(() => {
+          console.log('[DMH] Silent refresh timeout');
+          cleanup(false);
+        }, 10000);
+        
+        // Also listen for iframe load errors
+        iframe.onerror = () => {
+          console.log('[DMH] Silent refresh iframe error');
+          cleanup(false);
+        };
+        
+        iframe.onload = () => {
+          // Give a bit more time for the postMessage to arrive
+          setTimeout(() => {
+            if (!done) {
+              console.log('[DMH] Silent refresh iframe loaded but no message received');
+              cleanup(false);
+            }
+          }, 2000);
+        };
+      } catch (error) {
+        console.error('[DMH] Silent refresh error:', error);
+        resolve(false);
+      }
+    });
+  },
+
+  // NEW: Direct token refresh method using stored refresh token
+  async directTokenRefresh() {
+    try {
+      // Check if we have a stored refresh token
+      if (!this.refreshToken) {
+        return false;
+      }
+
+      // Make a direct request to the refresh endpoint with the stored refresh token
+      const response = await fetch(`${this.workerOrigin}/session/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          refresh_token: this.refreshToken
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Refresh token is invalid, clear stored tokens
+          this.clearTokens();
+        }
+        return false;
+      }
+
+      // Parse the JSON response
+      const data = await response.json();
+      
+              if (data.token && data.expiresAt) {
+          // Store the new tokens
+          this.storeTokens(data.token, data.refreshToken || this.refreshToken, data.expiresAt);
+          return true;
+        } else {
+          return false;
+        }
+    } catch (error) {
+      console.error('[DMH] Direct token refresh error:', error);
+      return false;
+    }
+  }
+};
 
 // ========================================
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "3.5",
-  updateRate: 150,
+  version: "3.7",
+  updateRate: 1000, // Increased from 150ms to 1000ms (1 second) for better performance
+  
+  // NEW: Cloudflare Worker Integration
+  cloudflare: {
+    workerBaseUrl: 'https://squadjs-admin-monitor-worker.itsdast0m.workers.dev',
+    serverId: null, // Will be auto-detected
+    endpoints: {
+      overview: '/api/overview',
+      status: '/api/status',
+      adminActivity: '/api/admin-activity',
+      wsToken: '/ws/token'
+    }
+  },
   
   // NEW: Enhanced caching configuration
   cacheConfig: {
@@ -31,6 +347,15 @@ const CONFIG = {
     maxCacheSize: 1000,             // Maximum cache entries
     preloadThreshold: 50,           // Preload when this many players are visible
     aggressiveCaching: true         // Cache more aggressively
+  },
+  
+  // NEW: Audio and alert configuration
+  alertConfig: {
+    audioEnabled: true,             // Audio alerts enabled by default
+    maxAlertHistory: 10,            // Keep last 10 admin commands
+    flashDuration: 2000,            // Flash duration in milliseconds
+    audioVolume: 0.5,               // Audio volume (0.0 to 1.0)
+    alertExpiryMinutes: 20          // Alert history expires after 20 minutes
   },
 
   servers: [
@@ -158,27 +483,18 @@ const Utils = {
   
   // NEW: Enhanced debugging utilities
   debugCacheStatus() {
-    console.log('=== CACHE STATUS DEBUG ===');
-    console.log(`CBL Cache: ${CBLPlayerListManager.cblCache.size} entries`);
-    console.log(`Admin Cache: ${AdminBadgeDecorator.adminCache.size} entries`);
-    console.log(`Element Cache: ${CBLPlayerListManager.elementCache.size} entries`);
-    console.log(`Processed SteamIDs: ${CBLPlayerListManager.processedSteamIDs.size}`);
-    console.log(`Colored Elements: ${CBLPlayerListManager.coloredElements.size || 'WeakSet (unknown size)'}`);
-    console.log('========================');
+    // Cache status available via window.DMH_DEBUG.getCacheInfo()
   },
   
   // NEW: Force refresh all styling (global utility)
   forceRefreshAllStyling() {
-    console.log('Forcing refresh of all styling...');
     MainUpdater.forceRefreshAll();
   },
   
   // NEW: Clear all caches (global utility)
   clearAllCaches() {
-    console.log('Clearing all caches...');
     CBLPlayerListManager.reset();
     AdminBadgeDecorator.clearCache();
-    console.log('All caches cleared');
   }
 };
 
@@ -206,7 +522,6 @@ const PersistentStorage = {
       };
       
       localStorage.setItem(this.storageKey, JSON.stringify(cacheData));
-      console.log(`Cache saved to localStorage: ${Object.keys(cacheData.cblData).length} CBL entries, ${Object.keys(cacheData.adminData).length} admin entries`);
     } catch (e) {
       console.warn('Failed to save cache to localStorage:', e);
     }
@@ -224,7 +539,6 @@ const PersistentStorage = {
       
       // Version check
       if (cacheData.version !== this.version) {
-        console.log('Cache version mismatch, clearing old cache');
         this.clearStorage();
         return false;
       }
@@ -232,14 +546,12 @@ const PersistentStorage = {
       // Expiry check
       const now = Date.now();
       if (now - cacheData.timestamp > CONFIG.cacheConfig.cacheExpiry) {
-        console.log('Cache expired, clearing old cache');
         this.clearStorage();
         return false;
       }
       
       // Server ID check (only restore if same server)
       if (cacheData.metadata?.serverId !== this.extractServerId()) {
-        console.log('Different server, not restoring cache');
         return false;
       }
       
@@ -247,7 +559,6 @@ const PersistentStorage = {
       this.deserializeCBLData(cacheData.cblData);
       this.deserializeAdminData(cacheData.adminData);
       
-      console.log(`Cache restored from localStorage: ${Object.keys(cacheData.cblData).length} CBL entries, ${Object.keys(cacheData.adminData).length} admin entries`);
       return true;
       
     } catch (e) {
@@ -305,7 +616,7 @@ const PersistentStorage = {
   clearStorage() {
     try {
       localStorage.removeItem(this.storageKey);
-      console.log('LocalStorage cache cleared');
+
     } catch (e) {
       console.warn('Failed to clear localStorage:', e);
     }
@@ -350,6 +661,7 @@ const StyleManager = {
     Object.values(styles).forEach(s=>GM_addStyle(s));
     this.addCBLPlayerListStyles();
     this.addAdminBadgeStyles();
+    this.addCloudflareOverlayStyles();
   },
   addCBLPlayerListStyles(){
     GM_addStyle(`
@@ -371,6 +683,482 @@ const StyleManager = {
         padding:2px 4px !important;
         border-radius:3px !important;
         text-shadow:0 0 3px rgba(0,255,247,.4) !important;
+      }
+    `);
+  },
+  
+  addCloudflareOverlayStyles(){
+    GM_addStyle(`
+      .dmh-overlay {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        width: 320px;
+        background: rgba(0, 0, 0, 0.95);
+        border: 1px solid rgba(0, 255, 247, 0.3);
+        border-radius: 12px;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        z-index: 100000;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        transition: all 0.3s ease;
+        cursor: grab;
+      }
+      
+      .dmh-overlay:hover {
+        border-color: rgba(0, 255, 247, 0.6);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+      }
+      
+      .dmh-overlay.collapsed {
+        width: 320px;
+        height: 50px;
+      }
+      
+      .overlay-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 18px;
+        background: linear-gradient(135deg, rgba(0, 255, 247, 0.1), rgba(0, 255, 247, 0.05));
+        border-radius: 12px 12px 0 0;
+        border-bottom: 1px solid rgba(0, 255, 247, 0.2);
+      }
+      
+      .overlay-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        font-size: 15px;
+      }
+      
+      .title-icon {
+        color: #00fff7;
+        font-size: 18px;
+      }
+      
+      .overlay-controls {
+        display: flex;
+        gap: 6px;
+      }
+      
+      .overlay-btn {
+        background: rgba(0, 255, 247, 0.1);
+        border: 1px solid rgba(0, 255, 247, 0.3);
+        color: #00fff7;
+        border-radius: 6px;
+        width: 26px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 13px;
+      }
+      
+      .overlay-btn:hover {
+        background: rgba(0, 255, 247, 0.2);
+        border-color: rgba(0, 255, 247, 0.5);
+        transform: scale(1.05);
+      }
+      
+      /* Audio toggle button states */
+      .audio-toggle-btn.audio-off {
+        background: rgba(255, 0, 0, 0.1);
+        border-color: rgba(255, 0, 0, 0.3);
+        color: #ff6666;
+      }
+      
+      .audio-toggle-btn.audio-off:hover {
+        background: rgba(255, 0, 0, 0.2);
+        border-color: rgba(255, 0, 0, 0.5);
+      }
+      
+      /* Alert flashing effects */
+      .alert-flash {
+        animation: alertFlash 2s ease-out;
+      }
+      
+      @keyframes alertFlash {
+        0% { 
+          background: rgba(255, 0, 0, 0.3);
+          box-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+          transform: scale(1.02);
+        }
+        50% { 
+          background: rgba(255, 0, 0, 0.2);
+          box-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
+          transform: scale(1.01);
+        }
+        100% { 
+          background: transparent;
+          box-shadow: none;
+          transform: scale(1);
+        }
+      }
+      
+      /* Dropdown arrow styling */
+      .dropdown-arrow {
+        margin-left: auto;
+        cursor: pointer;
+        color: #00fff7;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        user-select: none;
+      }
+      
+      .dropdown-arrow:hover {
+        color: #ffffff;
+        transform: scale(1.1);
+      }
+      
+      /* Alert history styling */
+      .alert-history {
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 8px;
+        border-top: 1px solid rgba(255, 0, 0, 0.2);
+        padding-top: 8px;
+      }
+      
+      .alert-history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        padding: 0 4px;
+      }
+      
+      .history-title {
+        font-weight: 600;
+        color: #ff6666;
+        font-size: 12px;
+      }
+      
+      .history-count {
+        color: #888;
+        font-size: 11px;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 2px 6px;
+        border-radius: 10px;
+      }
+      
+      .alert-history-items {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      
+      .alert-history-item {
+        background: rgba(255, 0, 0, 0.1);
+        border-left: 3px solid #ff6666;
+        padding: 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        transition: all 0.2s ease;
+      }
+      
+      .alert-history-item:hover {
+        background: rgba(255, 0, 0, 0.15);
+        transform: translateX(2px);
+      }
+      
+      /* Quick Links section styling */
+      .quick-links-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 8px;
+      }
+      
+      .quick-link-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border: none;
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
+        min-height: 36px;
+      }
+      
+      .quick-link-btn:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.1);
+      }
+      
+      .quick-link-btn:active {
+        transform: scale(0.98);
+      }
+      
+      .quick-link-btn .btn-icon,
+      .quick-link-btn .version-icon {
+        font-size: 14px;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+      }
+      
+      .quick-link-btn .btn-text {
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      
+      /* Button color variants */
+      .sop-btn {
+        background: linear-gradient(135deg, #666666 0%, #555555 100%);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      
+      .msg-btn {
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      
+      .rules-btn {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      
+      .version-btn {
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      
+      .version-btn .version-icon {
+        animation: pulse 2s infinite;
+        color: #00ff88;
+      }
+      
+      .alert-history-item:last-child {
+        margin-bottom: 0;
+      }
+      
+      .alert-history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+        font-size: 11px;
+      }
+      
+      .alert-history-player {
+        font-weight: bold;
+        color: #ff6666;
+      }
+      
+      .alert-history-time {
+        font-size: 10px;
+        color: #999;
+      }
+      
+      .alert-history-message {
+        color: #ccc;
+        font-style: italic;
+        font-size: 10px;
+      }
+      
+      .overlay-content {
+        padding: 20px;
+      }
+      
+      .overlay-section {
+        margin-bottom: 24px;
+      }
+      
+      .overlay-section:last-child {
+        margin-bottom: 0;
+      }
+      
+      .overlay-section h4 {
+        margin: 0 0 12px 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #00fff7;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .section-icon {
+        font-size: 14px;
+        opacity: 0.8;
+      }
+      
+      .info-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      
+      .info-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        font-size: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      
+      .info-item:last-child {
+        border-bottom: none;
+      }
+      
+      .info-label {
+        color: #ccc;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      
+      .info-value {
+        color: white;
+        font-weight: 600;
+        text-align: right;
+        max-width: 200px;
+        word-wrap: break-word;
+      }
+      
+      .admin-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+
+      
+      .admin-entry {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
+        font-size: 12px;
+      }
+      
+      .admin-icon {
+        color: #ffaa00;
+        font-size: 14px;
+      }
+      
+      .admin-name {
+        color: white;
+        font-weight: 500;
+      }
+      
+      .alert-entry {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      
+      .alert-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+      }
+      
+      .alert-icon {
+        color: #ff4444;
+        font-size: 14px;
+      }
+      
+      .alert-player {
+        color: white;
+        font-weight: 500;
+      }
+      
+      .alert-time {
+        color: #888;
+        font-size: 11px;
+      }
+      
+      .alert-message {
+        color: #ccc;
+        font-size: 11px;
+        font-family: monospace;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 4px 8px;
+        border-radius: 4px;
+        margin-left: 22px;
+        border-left: 2px solid rgba(255, 68, 68, 0.3);
+      }
+      
+      .status-note {
+        font-size: 10px;
+        color: #ffaa00;
+        margin-top: 12px;
+        text-align: center;
+        padding: 8px;
+        background: rgba(255, 170, 0, 0.1);
+        border-radius: 6px;
+        border: 1px solid rgba(255, 170, 0, 0.2);
+      }
+      
+      .overlay-footer {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding: 16px 18px;
+        border-top: 1px solid rgba(0, 255, 247, 0.2);
+        border-radius: 0 0 12px 12px;
+      }
+      
+      .overlay-footer .overlay-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+      }
+      
+      .dmh-overlay.collapsed .overlay-content,
+      .dmh-overlay.collapsed .overlay-footer {
+        display: none;
+      }
+      
+      .websocket-connected {
+        color: #00ff88 !important;
+        font-weight: 700;
+      }
+      
+      .websocket-error {
+        color: #ff4444 !important;
+        font-style: italic;
+      }
+      
+      .websocket-connecting {
+        color: #ffaa00 !important;
+        font-weight: 600;
+      }
+      
+      .connection-websocket {
+        border-color: rgba(0, 255, 136, 0.5) !important;
+      }
+      
+      .connection-error {
+        border-color: rgba(255, 68, 68, 0.5) !important;
+      }
+      
+      .connection-disconnected {
+        border-color: rgba(255, 170, 0, 0.5) !important;
+      }
+      
+      @media (max-width: 768px) {
+        .dmh-overlay {
+          width: 340px;
+          left: 10px;
+          top: 10px;
+        }
       }
     `);
   },
@@ -403,47 +1191,6 @@ const StyleManager = {
 // UI (buttons)
 // ========================================
 const UIComponents = {
-  createCornerButtons(){
-    const wrap=Object.assign(document.createElement("div"),{className:"bm-button-container",style:"position:absolute;top:105px;right:1%;z-index:99999;display:flex;gap:8px;align-items:center;"});
-    document.body.appendChild(wrap); this.addCornerButtonStyles();
-
-    CONFIG.servers.forEach(s=>{
-      const btn=document.createElement("button");
-      btn.id=s.id; btn.className="bm-corner-btn"; btn.setAttribute('data-tooltip',s.id);
-      btn.innerHTML=`${this.getButtonIcon(s.label)}<span class="btn-text">${s.label}</span>`;
-      btn.style.setProperty('--btn-color',s.backgroundColor);
-      btn.addEventListener('click',()=>{this.animateClick(btn); window.open(s.url,"_blank");});
-      wrap.appendChild(btn);
-    });
-
-    const v=document.createElement("button");
-    v.id="version"; v.className="bm-corner-btn bm-version-btn"; v.setAttribute('data-tooltip','Script Version');
-    v.innerHTML=`<span class="version-icon">⚡</span><span class="btn-text">${CONFIG.version}</span>`;
-    v.style.setProperty('--btn-color','#1a1a1a');
-    v.addEventListener('click',()=>{this.animateClick(v); window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js","_blank");});
-    wrap.appendChild(v);
-  },
-  getButtonIcon(label){ const icons={'SOP':'📋','MSG':'💬','Rules':'📖'}; return `<span class="btn-icon">${icons[label]||'🎲'}</span>`; },
-  addCornerButtonStyles(){
-    const style=document.createElement("style");
-    style.innerHTML=`
-      @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(var(--btn-color-rgb),.7);}70%{box-shadow:0 0 0 10px rgba(var(--btn-color-rgb),0);}100%{box-shadow:0 0 0 0 rgba(var(--btn-color-rgb),0);}}
-      @keyframes clickWave{0%{transform:scale(1);}50%{transform:scale(.95);}100%{transform:scale(1);}}
-      .bm-corner-btn{position:relative;display:flex;align-items:center;gap:6px;min-width:45px;height:36px;padding:8px 12px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--btn-color) 0%,color-mix(in srgb,var(--btn-color) 80%,black) 100%);color:white;font-weight:600;font-size:11px;cursor:pointer;overflow:hidden;transition:all .3s cubic-bezier(.4,0,.2,1);box-shadow:0 4px 12px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.2);backdrop-filter:blur(10px);--btn-color-rgb:255,255,255;}
-      .bm-corner-btn::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent);transition:left .5s;}
-      .bm-corner-btn:hover::before{left:100%;}
-      .bm-corner-btn:hover{transform:translateY(-2px) scale(1.05);box-shadow:0 8px 20px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.3);filter:brightness(1.1);}
-      .bm-corner-btn:active{animation:clickWave .2s ease-out;}
-      .bm-corner-btn .btn-icon{font-size:14px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.3));}
-      .bm-corner-btn .btn-text{text-shadow:0 1px 2px rgba(0,0,0,.3);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
-      .bm-version-btn{background:linear-gradient(135deg,#1a1a1a 0%,#2d2d2d 50%,#1a1a1a 100%)!important;border:1px solid #333;}
-      .bm-version-btn .version-icon{animation:pulse 2s infinite;color:#00ff88;}
-      .bm-corner-btn::after{content:attr(data-tooltip);position:absolute;bottom:-35px;left:50%;transform:translateX(-50%);padding:4px 8px;background:rgba(0,0,0,.9);color:white;font-size:10px;border-radius:4px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .3s;z-index:100000;}
-      .bm-corner-btn:hover::after{opacity:1;}
-      @media(max-width:768px){.bm-corner-btn .btn-text{display:none;}.bm-corner-btn{min-width:36px;padding:8px;}}
-    `;
-    document.head.appendChild(style);
-  },
   createPlayerButtons(){
     const copyBtn=Object.assign(document.createElement("button"),{id:"copy-button",className:"bm-player-btn bm-copy-btn"});
     copyBtn.innerHTML=`<span class="btn-icon">📋</span><span class="btn-text">Copy Player Info</span><span class="btn-shine"></span>`;
@@ -603,7 +1350,7 @@ const AdminBadgeDecorator = {
     });
     
     if (isAdmin) {
-      console.log(`Cached admin status for ${steamID}`);
+
     }
     
     return isAdmin;
@@ -666,7 +1413,7 @@ const AdminBadgeDecorator = {
     this.adminCache.clear();
     this.adminElements = new WeakSet();
     this.elementAdminCache.clear();
-    console.log("Admin cache cleared");
+
   },
 
   // NEW: Clean up expired cache entries
@@ -680,7 +1427,7 @@ const AdminBadgeDecorator = {
       }
     }
     
-    console.log(`Admin cache cleaned up, ${this.adminCache.size} entries remaining`);
+    
   },
 
   // NEW: Force refresh admin badges for all visible elements
@@ -702,7 +1449,7 @@ const AdminBadgeDecorator = {
         }
       });
       
-      console.log(`Admin force refresh: refreshed ${refreshed} admin badges`);
+
     } catch (e) {
       console.warn('Admin force refresh error:', e);
     }
@@ -753,7 +1500,7 @@ const CBLPlayerListManager = {
       }
     });
     this.listObserver.observe(container, {childList: true, subtree: true});
-    console.log('CBL: observing player list for dynamic rows + scroll events');
+
   },
 
   // NEW: Setup scroll observer for better cache management
@@ -779,7 +1526,7 @@ const CBLPlayerListManager = {
       }
     }, { passive: true });
 
-    console.log('CBL: scroll observer setup complete');
+
   },
 
   // NEW: Handle scroll events to refresh styling
@@ -815,9 +1562,7 @@ const CBLPlayerListManager = {
         }
       });
       
-      if (refreshed > 0) {
-        console.log(`CBL scroll refresh: refreshed ${refreshed} visible elements`);
-      }
+
     } catch (e) {
       console.warn('CBL scroll refresh error:', e);
     }
@@ -848,7 +1593,7 @@ const CBLPlayerListManager = {
       for(const r of rows){ 
         if(await this.processPlayerRow(r)) count++; 
       }
-      console.log(`CBL scan: styled ${count} rows (enhanced caching active).`);
+
     }catch(e){ console.error("CBL list scan error:", e); }
     finally{ this.isProcessing = false; }
   },
@@ -890,7 +1635,7 @@ const CBLPlayerListManager = {
       });
       
       this.lastProcessTime = 0;
-      if(applied) console.log(`CBL fastRescan: re-applied for ${applied} rows + admin badges (enhanced cache).`);
+
     }catch(e){
       console.warn('CBL fastRescan error:', e);
     }
@@ -1000,10 +1745,10 @@ const CBLPlayerListManager = {
     try{
       const res=await CBLManager.makeGraphQLRequest(steamID);
       const parsed=CBLManager.parseResponse(res);
-      console.log(`CBL data for ${steamID}:`,parsed);
+
       return parsed;
     }catch(e){
-      console.log(`No CBL data for ${steamID}:`,e?.message||e);
+      
       return {riskRating:0,activeBans:0,expiredBans:0};
     }
   },
@@ -1041,7 +1786,7 @@ const CBLPlayerListManager = {
     }else{
       nameEl.title='CBL: Clean (No history found)';
     }
-    if(!nameEl.dataset.cblLogged){ console.log(`Applied CBL coloring: ${nameEl.textContent.trim()} - Rating ${riskRating}, Active ${activeBans}`); nameEl.dataset.cblLogged="1"; }
+          if(!nameEl.dataset.cblLogged){ nameEl.dataset.cblLogged="1"; }
   },
 
   softReset(){
@@ -1056,7 +1801,7 @@ const CBLPlayerListManager = {
       this.scrollObserver.disconnect();
       this.scrollObserver = null;
     }
-    console.log("CBL Player List Manager soft reset (enhanced cache preserved)");
+
   },
 
   reset(){
@@ -1080,7 +1825,7 @@ const CBLPlayerListManager = {
       this.scrollObserver.disconnect();
       this.scrollObserver = null;
     }
-    console.log("CBL Player List Manager full reset (including enhanced caches)");
+
   },
 
   // NEW: Enhanced cache management methods
@@ -1128,7 +1873,7 @@ const CBLPlayerListManager = {
         }
       });
       
-      console.log(`CBL force refresh: refreshed ${refreshed} elements`);
+
     } catch (e) {
       console.warn('CBL force refresh error:', e);
     }
@@ -1143,7 +1888,7 @@ const CBLPlayerListManager = {
       const restored = PersistentStorage.loadCache();
       if (!restored) return;
       
-      console.log('Cache warmed from storage, applying cached styling...');
+  
       
       // Immediately apply cached styling to visible elements
       const rows = document.querySelectorAll('div[role="row"], tr, div[data-session]');
@@ -1167,7 +1912,7 @@ const CBLPlayerListManager = {
         AdminBadgeDecorator.maybeDecorate(row, nameEl, steamID);
       });
       
-      console.log(`Cache warming completed: ${applied} elements styled from cache`);
+
       
       // Mark as processed to prevent unnecessary re-processing
       this.lastProcessTime = Date.now();
@@ -1185,7 +1930,7 @@ const CBLPlayerListManager = {
     this.cacheExpiryMultiplier = 2; // Cache data for 2x longer
     this.preloadThreshold = CONFIG.cacheConfig.preloadThreshold;
     
-    console.log('Aggressive caching enabled');
+
   }
 };
 
@@ -1323,7 +2068,7 @@ const RouterWatch = {
       if (MainUpdater.isOnServerRCONPage()) {
         // Returning to RCON page - warm cache immediately
         if (oldURL && oldURL.includes('/rcon/players/')) {
-          console.log('Returning to RCON page from player page - warming cache...');
+      
           
           // Small delay to ensure DOM is ready, then warm cache
           setTimeout(() => {
@@ -1337,7 +2082,7 @@ const RouterWatch = {
         }
       } else if (oldURL && oldURL.includes('/rcon/servers/') && location.href.includes('/rcon/players/')) {
         // Navigating to player page - save cache before leaving
-        console.log('Navigating to player page - saving cache...');
+    
         if (CONFIG.cacheConfig.persistentStorage) {
           PersistentStorage.saveCache();
         }
@@ -1367,7 +2112,7 @@ const RouterWatch = {
     // Also listen for wheel events (for mouse wheel scrolling)
     document.addEventListener('wheel', scrollHandler, { passive: true });
     
-    console.log('Global scroll handling setup complete');
+
   },
   
   // NEW: Cleanup scroll handlers
@@ -1464,7 +2209,7 @@ const MainUpdater = {
       try {
         CBLPlayerListManager.cleanupOldCache();
         AdminBadgeDecorator.cleanupCache();
-        console.log('Periodic cache cleanup completed');
+    
       } catch (e) {
         console.warn('Cache cleanup error:', e);
       }
@@ -1476,9 +2221,1486 @@ const MainUpdater = {
     try {
       CBLPlayerListManager.forceRefreshAll();
       AdminBadgeDecorator.forceRefreshAll();
-      console.log('Force refresh completed');
+  
     } catch (e) {
       console.warn('Force refresh error:', e);
+    }
+  }
+};
+
+// ========================================
+// CLOUDFLARE WORKER INTEGRATION MODULE (WebSocket + Snapshots)
+// ========================================
+const CloudflareIntegration = {
+  // State management
+  state: {
+    lastUpdate: 0,
+    isConnected: false,
+    connectionStatus: 'disconnected',
+    hasSnapshotData: false, // NEW: Track if we have HTTP snapshot data
+    data: {
+      adminActivity: null
+    },
+    alertHistory: [], // NEW: Store multiple admin commands
+    audioEnabled: CONFIG.alertConfig.audioEnabled
+  },
+
+  // Initialize the integration
+  init() {
+    // Detect server ID first
+    this.detectServerId();
+    
+    // Setup event listeners (but not overlay buttons yet)
+    this.setupEventListeners();
+    
+    // Create overlay
+    this.createOverlay();
+    
+    // Setup overlay button event listeners AFTER overlay is created
+    this.setupOverlayButtons();
+    
+    // NEW: Setup audio system
+    this.setupAudio();
+    
+    // NEW: Setup periodic alert cleanup (every 5 minutes)
+    this.setupPeriodicCleanup();
+    
+    // Start with a delay to ensure page is ready
+    setTimeout(async () => {
+      // Show status while checking authentication
+      this.setStatus("Checking authentication...");
+      
+      // Try to restore authentication first (including silent refresh)
+      const isAuthenticated = await DMH_AUTH.ensureLogin();
+      
+      if (isAuthenticated) {
+        // We have valid auth, start WebSocket connection
+        this.setStatus("Connecting...");
+        this.handleAuthSuccess();
+        this.startWebSocketConnection();
+      } else {
+        // No valid auth found, show login required
+        this.handleAuthFailure("Login required");
+      }
+    }, 2000);
+  },
+
+  // Auto-detect server ID from URL
+  detectServerId() {
+    // First, check if we have a manual override saved
+    const savedServerId = localStorage.getItem('dmh-server-id-override');
+    if (savedServerId) {
+      CONFIG.cloudflare.serverId = savedServerId;
+      return;
+    }
+    
+    // Use bulletproof server ID detection
+    const serverId = this.detectServerIdFromPage();
+    if (serverId) {
+      CONFIG.cloudflare.serverId = serverId;
+    }
+  },
+
+  // Bulletproof server ID detection helper
+  detectServerIdFromPage() {
+    // URL like: https://www.battlemetrics.com/servers/squad/27157414
+    const m = location.pathname.match(/\/servers\/(?:[a-z]+\/)?(\d{5,})/i);
+    if (m) return m[1];
+
+    // Sometimes BM pages stash it in data attributes
+    const el = document.querySelector('[data-server-id]');
+    if (el?.getAttribute('data-server-id')) return el.getAttribute('data-server-id');
+
+    // Fallback: look for a link to the server page
+    const link = document.querySelector('a[href*="/servers/"]');
+    const m2 = link?.href?.match(/\/servers\/(?:[a-z]+\/)?(\d{5,})/i);
+    if (m2) return m2[1];
+
+    return null;
+  },
+
+  // Setup event listeners for real-time updates
+  setupEventListeners() {
+    // Listen for visibility changes to reconnect if needed
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.state.connectionStatus !== 'connected') {
+        this.forceUpdate(); // Restart connection if needed
+      }
+    });
+
+    // Listen for page focus to refresh data
+    window.addEventListener('focus', () => {
+      if (this.state.connectionStatus !== 'connected') {
+        this.forceUpdate();
+      }
+    });
+
+    // Listen for OAuth completion messages
+    window.addEventListener('message', (event) => {
+      // Only accept messages from our worker
+      if (event.origin !== 'https://squadjs-admin-monitor-worker.itsdast0m.workers.dev') return;
+      
+      if (event.data && event.data.type === 'dmh_auth') {
+        console.log('[DMH] Received auth message:', event.data);
+        
+        // Store the session data in localStorage
+        DMH_AUTH.storeTokens(
+          event.data.token, 
+          event.data.refreshToken || event.data.refresh_token, 
+          event.data.expiresAt
+        );
+        
+        console.log('[DMH] Logged in as:', event.data.user?.username);
+        
+        // Now that we're authenticated, try to connect
+        this.handleAuthSuccess();
+        this.startWebSocketConnection();
+      }
+    });
+    
+    // NEW: Setup periodic token refresh to prevent expiration
+    this.setupPeriodicTokenRefresh();
+    
+    // NEW: Periodic authentication check
+    this.setupPeriodicAuthCheck();
+    
+    // NEW: Check for stale connections and reconnect if needed
+    this.setupStaleConnectionCheck();
+  },
+
+  // Setup overlay button functionality
+  setupOverlayButtons() {
+    const overlay = document.getElementById('dmh-cloudflare-overlay');
+    if (!overlay) return;
+
+    // Discord login button
+    const discordLoginBtn = overlay.querySelector('#discord-login-btn');
+    if (discordLoginBtn) {
+      console.log('[DMH] Discord login button found, adding event listener');
+      discordLoginBtn.addEventListener('click', async () => {
+        console.log('[DMH] Discord login button clicked!');
+        this.setStatus('Redirecting to Discord...');
+        this.state.connectionStatus = 'connecting';
+        DMH_AUTH.startLogin();
+      });
+    } else {
+      console.log('[DMH] Discord login button NOT found!');
+    }
+
+    // Logout button
+    const logoutBtn = overlay.querySelector('#logout-btn');
+    if (logoutBtn) {
+      console.log('[DMH] Logout button found, adding event listener');
+      logoutBtn.addEventListener('click', async () => {
+        console.log('[DMH] Logout button clicked!');
+        await this.logout();
+      });
+    } else {
+      console.log('[DMH] Logout button NOT found!');
+    }
+
+    // Debug button
+    const debugBtn = overlay.querySelector('.debug-btn');
+    if (debugBtn) {
+      debugBtn.addEventListener('click', () => {
+        this.showDebugInfo();
+      });
+    }
+
+    // Credits button
+    const creditsBtn = overlay.querySelector('.credits-btn');
+    if (creditsBtn) {
+      creditsBtn.addEventListener('click', () => {
+        this.showCredits();
+      });
+    }
+
+    // Audio toggle button (initialize and bind)
+    const audioBtn = overlay.querySelector('#audio-toggle-btn');
+    if (audioBtn) {
+      // Initialize icon state on creation
+      this.updateAudioButtonState();
+      audioBtn.addEventListener('click', () => {
+        this.toggleAudio();
+        this.updateAudioButtonState();
+      });
+    }
+
+    // Clear history button
+    const clearHistoryBtn = overlay.querySelector('#clear-history-btn');
+    if (clearHistoryBtn) {
+      clearHistoryBtn.addEventListener('click', () => {
+        this.clearAlertHistory();
+      });
+    }
+
+    // Alert dropdown arrow
+    const alertDropdownArrow = overlay.querySelector('#alert-dropdown-arrow');
+    if (alertDropdownArrow) {
+      alertDropdownArrow.addEventListener('click', () => {
+        this.toggleAlertHistory();
+      });
+    }
+
+    // Quick link buttons
+    const sopBtn = overlay.querySelector('#sop-btn');
+    if (sopBtn) {
+      sopBtn.addEventListener('click', () => {
+        window.open("https://docs.google.com/document/d/e/2PACX-1vTETPd69RXThe_gTuukFXeeMVTOhMvyzGmyeuXFKkHYd_Cg4CTREEwP2K61u_sWOleMJrkMKwQbBnCB/pub", "_blank");
+      });
+    }
+
+    const msgBtn = overlay.querySelector('#msg-btn');
+    if (msgBtn) {
+      msgBtn.addEventListener('click', () => {
+        window.open("https://docs.google.com/spreadsheets/d/1hBLYNHUahW3UxxOUJTb1GnZwo3HpmBSFTC3-Nbz-RXk/edit?gid=1852943146#gid=1852943146", "_blank");
+      });
+    }
+
+    const rulesBtn = overlay.querySelector('#rules-btn');
+    if (rulesBtn) {
+      rulesBtn.addEventListener('click', () => {
+        window.open("https://docs.google.com/document/d/e/2PACX-1vQzcm1es81lsxBEnXmSPRlqSS8Wgm04rd0KTmeJn88CN3Lo8pg1sT2-C1WTEXDBJfiDmW7Y6sJwv-Vi/pub", "_blank");
+      });
+    }
+
+    const versionBtn = overlay.querySelector('#version-btn');
+    if (versionBtn) {
+      versionBtn.addEventListener('click', () => {
+        window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js", "_blank");
+      });
+    }
+  },
+
+  // Force immediate update (for manual refresh)
+  async forceUpdate() {
+    console.log('[DMH] Force update triggered');
+    
+    // Reset connection status
+    this.handleAuthSuccess();
+    this.setStatus('Reconnecting...');
+    
+    // Restart WebSocket connection to get fresh data
+    this.startWebSocketConnection();
+  },
+  
+  // NEW: Setup audio system
+  setupAudio() {
+    // Create audio context for admin alerts
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Load audio settings from localStorage
+    const savedAudioState = localStorage.getItem('dmh-audio-enabled');
+    if (savedAudioState !== null) {
+      this.state.audioEnabled = savedAudioState === 'true';
+    }
+    
+    // Update audio button state
+    this.updateAudioButtonState();
+  },
+  
+  // NEW: Toggle audio on/off
+  toggleAudio() {
+    this.state.audioEnabled = !this.state.audioEnabled;
+    localStorage.setItem('dmh-audio-enabled', this.state.audioEnabled.toString());
+    this.updateAudioButtonState();
+  },
+  
+  // NEW: Update audio button visual state
+  updateAudioButtonState() {
+    const audioBtn = document.getElementById('audio-toggle-btn');
+    if (audioBtn) {
+      if (this.state.audioEnabled) {
+        audioBtn.textContent = '🔊';
+        audioBtn.classList.remove('audio-off');
+        audioBtn.title = 'Disable Audio Alerts';
+      } else {
+        audioBtn.textContent = '🔇';
+        audioBtn.classList.add('audio-off');
+        audioBtn.title = 'Enable Audio Alerts';
+      }
+    }
+  },
+  
+  // NEW: Play admin alert sound
+  playAdminAlertSound() {
+    if (!this.state.audioEnabled || !this.audioContext) return;
+    
+    try {
+      // Create a simple alert sound (beep pattern)
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      // Set volume
+      gainNode.gain.setValueAtTime(CONFIG.alertConfig.audioVolume, this.audioContext.currentTime);
+      
+      // Create alert pattern: high-low-high beep
+      oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(600, this.audioContext.currentTime + 0.1);
+      oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime + 0.2);
+      
+      oscillator.start();
+      oscillator.stop(this.audioContext.currentTime + 0.3);
+    } catch (error) {
+      console.warn('Could not play admin alert sound:', error);
+    }
+  },
+
+
+
+
+
+  // Create the overlay UI
+  createOverlay() {
+    // Remove existing overlay if present
+    Utils.removeElement('dmh-cloudflare-overlay');
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'dmh-cloudflare-overlay';
+    overlay.className = 'dmh-overlay';
+    overlay.innerHTML = this.getOverlayHTML();
+    
+    document.body.appendChild(overlay);
+    
+    // Make it draggable
+    this.makeOverlayDraggable(overlay);
+    
+    // Setup collapse functionality
+    this.setupCollapseFunctionality(overlay);
+    
+    // Restore position
+    this.restoreOverlayPosition(overlay);
+  },
+
+  // Get overlay HTML template
+  getOverlayHTML() {
+    return `
+      <div class="overlay-header">
+        <div class="overlay-title">
+          <span class="title-icon">⚡</span>
+          <span class="title-text">DMH Server Monitor</span>
+        </div>
+        <div class="overlay-controls">
+          <button class="overlay-btn collapse-btn" title="Collapse/Expand">−</button>
+        </div>
+      </div>
+      
+      <div class="overlay-content">
+        <div class="overlay-section admin-camera">
+          <h4><span class="section-icon">📹</span>Admin Camera</h4>
+          <div class="admin-list" id="admin-camera-list">
+            <div class="admin-entry">
+              <span class="admin-icon">🛡️</span>
+              <span class="admin-name">No admins in camera</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="overlay-section last-alert">
+          <h4>
+            <span class="section-icon">⚠️</span>Player Alerts
+            <span class="dropdown-arrow" id="alert-dropdown-arrow" title="Toggle Alert History">▼</span>
+          </h4>
+          <div class="alert-entry" id="last-alert-entry">
+            <div class="alert-header">
+              <span class="alert-icon">👤</span>
+              <span class="alert-player" id="alert-player">No alerts</span>
+              <span class="alert-time" id="alert-time"></span>
+            </div>
+            <div class="alert-message" id="alert-message"></div>
+          </div>
+          <div class="alert-history" id="alert-history" style="display: none;">
+            <div class="alert-history-header">
+              <span class="history-title">Alert History</span>
+              <span class="history-count" id="history-count"></span>
+            </div>
+            <div class="alert-history-items" id="alert-history-items">
+              <!-- Alert history items will be populated here -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="overlay-section quick-links">
+          <h4><span class="section-icon">🔗</span>Quick Links</h4>
+          <div class="quick-links-grid">
+            <button class="quick-link-btn sop-btn" id="sop-btn" title="Standard Operating Procedures">
+              <span class="btn-icon">📋</span>
+              <span class="btn-text">SOP</span>
+            </button>
+            <button class="quick-link-btn msg-btn" id="msg-btn" title="Message Spreadsheet">
+              <span class="btn-icon">💬</span>
+              <span class="btn-text">MSG</span>
+            </button>
+            <button class="quick-link-btn rules-btn" id="rules-btn" title="Server Rules">
+              <span class="btn-icon">📖</span>
+              <span class="btn-text">Rules</span>
+            </button>
+            <button class="quick-link-btn version-btn" id="version-btn" title="Script Version">
+              <span class="version-icon">⚡</span>
+              <span class="btn-text">3.7</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="overlay-section api-status">
+          <h4><span class="section-icon">📡</span>API Status</h4>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Status:</span>
+              <span class="info-value" id="connection-status">Connecting...</span>
+            </div>
+
+            <div class="info-item">
+              <span class="info-label">Connection:</span>
+              <span class="connection-value" id="polling-mode">WebSocket</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="overlay-footer">
+        <button class="overlay-btn debug-btn" title="Debug Info">🐛</button>
+        <button class="overlay-btn credits-btn" title="Credits">💝</button>
+        <button class="overlay-btn audio-toggle-btn" title="Toggle Audio Alerts" id="audio-toggle-btn">🔊</button>
+        <button class="overlay-btn clear-history-btn" title="Clear Alert History" id="clear-history-btn">🗑️</button>
+        <button class="overlay-btn discord-login-btn" title="Login with Discord" id="discord-login-btn">🔐</button>
+      </div>
+    `;
+  },
+
+  // Make overlay draggable (simple and reliable optimization)
+  makeOverlayDraggable(overlay) {
+    let isDragging = false;
+    let startX, startY, startLeft, startTop;
+    let lastMoveTime = 0;
+    const throttleMs = 8; // ~120fps throttling for ultra-smooth dragging
+
+    const header = overlay.querySelector('.overlay-header');
+    
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.overlay-controls')) return; // Don't drag when clicking controls
+      
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = parseInt(overlay.style.left) || 0;
+      startTop = parseInt(overlay.style.top) || 0;
+      
+      // Performance optimization: disable transitions during drag
+      overlay.style.transition = 'none';
+      
+      overlay.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      // Simple time-based throttling for smooth performance
+      const now = Date.now();
+      if (now - lastMoveTime < throttleMs) return;
+      lastMoveTime = now;
+      
+      const deltaX = e.clientX - startX;
+      const deltaY = e.clientY - startY;
+      
+      // Keep using left/top but with throttling for smoothness
+      overlay.style.left = (startLeft + deltaX) + 'px';
+      overlay.style.top = (startTop + deltaY) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        overlay.style.cursor = 'grab';
+        
+        // Re-enable transitions after drag
+        overlay.style.transition = '';
+        
+        // Save position to localStorage (only on mouseup, not during drag)
+        this.saveOverlayPosition(overlay);
+      }
+    });
+  },
+
+  // Setup collapse functionality
+     setupCollapseFunctionality(overlay) {
+      const collapseBtn = overlay.querySelector('.collapse-btn');
+      const debugBtn = overlay.querySelector('.debug-btn');
+      const creditsBtn = overlay.querySelector('.credits-btn');
+    const content = overlay.querySelector('.overlay-content');
+    const footer = overlay.querySelector('.overlay-footer');
+    
+    let isCollapsed = false;
+    
+    // Collapse/Expand functionality
+    collapseBtn.addEventListener('click', () => {
+      isCollapsed = !isCollapsed;
+      
+      if (isCollapsed) {
+        content.style.display = 'none';
+        footer.style.display = 'none';
+        collapseBtn.textContent = '+';
+        overlay.classList.add('collapsed');
+      } else {
+        content.style.display = 'block';
+        footer.style.display = 'flex';
+        collapseBtn.textContent = '−';
+        overlay.classList.remove('collapsed');
+      }
+      
+      // Save collapsed state
+      localStorage.setItem('dmh-overlay-collapsed', isCollapsed);
+    });
+    
+
+    
+         // Debug button functionality
+     debugBtn.addEventListener('click', () => {
+       this.showDebugInfo();
+     });
+     
+     // Credits button functionality
+     creditsBtn.addEventListener('click', () => {
+       this.showCredits();
+     });
+     
+         // Audio toggle button is handled in setupOverlayButtons - no duplicate binding here
+     
+
+    
+    // Restore collapsed state
+    const wasCollapsed = localStorage.getItem('dmh-overlay-collapsed') === 'true';
+          if (wasCollapsed) {
+        collapseBtn.click(); // Trigger collapse
+      }
+    },
+  
+     // Show debug information
+   showDebugInfo() {
+     const debugInfo = `
+       <div style="background: rgba(0,0,0,0.9); padding: 20px; border-radius: 8px; border: 1px solid #00fff7;">
+         <h3 style="color: #00fff7; margin: 0 0 15px 0;">DMH Overlay Debug Info</h3>
+         <div style="margin-bottom: 10px; color: white;">
+           <strong>Current URL:</strong> ${location.href}<br>
+           <strong>Detected Server ID:</strong> ${CONFIG.cloudflare.serverId || 'None'}<br>
+           <strong>Worker URL:</strong> ${CONFIG.cloudflare.workerBaseUrl}<br>
+           <strong>Connection Status:</strong> ${this.state.connectionStatus}<br>
+           <strong>Last Update:</strong> ${this.state.lastUpdate ? new Date(this.state.lastUpdate).toLocaleTimeString() : 'Never'}<br>
+           <strong>Admin Activity:</strong> ${this.state.data.adminActivity ? 'Available' : 'None'}<br>
+           <strong>WebSocket:</strong> ${this.state.isConnected ? 'Connected' : 'Disconnected'}
+         </div>
+         <div style="margin-bottom: 15px;">
+           <button id="close-debug" style="background: #666; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Close</button>
+         </div>
+       </div>
+     `;
+     
+     // Remove existing debug dialog
+     Utils.removeElement('dmh-debug-dialog');
+     
+     const dialog = document.createElement('div');
+     dialog.id = 'dmh-debug-dialog';
+     dialog.style.cssText = `
+       position: fixed;
+       top: 50%;
+       left: 50%;
+       transform: translate(-50%, -50%);
+       z-index: 100001;
+       background: rgba(0,0,0,0.95);
+       padding: 20px;
+       border-radius: 12px;
+       border: 1px solid #00fff7;
+       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+     `;
+     dialog.innerHTML = debugInfo;
+     
+     document.body.appendChild(dialog);
+     
+     // Add event listener
+     document.getElementById('close-debug').addEventListener('click', () => {
+       Utils.removeElement('dmh-debug-dialog');
+     });
+   },
+   
+   // Show credits dialog
+   showCredits() {
+     const creditsInfo = `
+       <div style="background: rgba(0,0,0,0.9); padding: 20px; border-radius: 8px; border: 1px solid #00fff7;">
+         <h3 style="color: #00fff7; margin: 0 0 15px 0;">DMH Overlay - Credits and Mentions <3</h3>
+         <div style="margin-bottom: 10px; color: white; line-height: 1.6;">
+           <div style="margin-bottom: 15px;">
+             <strong style="color: #ffaa00;">Developed by ♚Q♦G♛ DasT0m!</strong>
+           </div>
+           <div style="margin-bottom: 15px;">
+             <strong>With help from:</strong><br>
+             ♚Q♦G♛ ArmyRat60<br>
+             ♚Q♦G♛ Edwin<br>
+             『DMH』Relish
+           </div>
+           <div style="margin-bottom: 15px; text-align: center;">
+             <strong style="color: #ff69b4; font-size: 16px;">Love you DMH Community <3</strong>
+           </div>
+         </div>
+         <div style="margin-bottom: 15px;">
+           <button id="close-credits" style="background: #666; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Close</button>
+         </div>
+       </div>
+     `;
+     
+     // Remove existing credits dialog
+     Utils.removeElement('dmh-credits-dialog');
+     
+     const dialog = document.createElement('div');
+     dialog.id = 'dmh-credits-dialog';
+     dialog.style.cssText = `
+       position: fixed;
+       top: 50%;
+       left: 50%;
+       transform: translate(-50%, -50%);
+       z-index: 100001;
+       background: rgba(0,0,0,0.95);
+       padding: 20px;
+       border-radius: 12px;
+       border: 1px solid #00fff7;
+       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+     `;
+     dialog.innerHTML = creditsInfo;
+     
+     document.body.appendChild(dialog);
+     
+     // Add event listener
+     document.getElementById('close-credits').addEventListener('click', () => {
+       Utils.removeElement('dmh-credits-dialog');
+     });
+   },
+   
+
+
+  // Save overlay position
+  saveOverlayPosition(overlay) {
+    const position = {
+      left: overlay.style.left,
+      top: overlay.style.top,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('dmh-overlay-position', JSON.stringify(position));
+  },
+
+  // Restore overlay position (with safety bounds)
+  restoreOverlayPosition(overlay) {
+    try {
+      const saved = localStorage.getItem('dmh-overlay-position');
+      if (saved) {
+        const position = JSON.parse(saved);
+        
+        // Parse saved positions safely
+        let left = parseInt(position.left) || 20;
+        let top = parseInt(position.top) || 20;
+        
+        // Safety bounds: ensure overlay is visible on screen
+        const maxLeft = Math.max(0, window.innerWidth - 400); // 400px = overlay width
+        const maxTop = Math.max(0, window.innerHeight - 300);  // 300px = approximate overlay height
+        
+        left = Math.max(0, Math.min(left, maxLeft));
+        top = Math.max(0, Math.min(top, maxTop));
+        
+        overlay.style.left = left + 'px';
+        overlay.style.top = top + 'px';
+        
+
+      } else {
+        overlay.style.left = '20px';
+        overlay.style.top = '20px';
+      }
+    } catch (e) {
+      console.warn('Error restoring overlay position, using defaults:', e);
+      overlay.style.left = '20px';
+      overlay.style.top = '20px';
+    }
+  },
+
+  // Update overlay with current data
+  updateOverlay() {
+    const overlay = document.getElementById('dmh-cloudflare-overlay');
+    if (!overlay) {
+      return;
+    }
+
+    // Update admin camera section
+    if (this.state.data.adminActivity) {
+      const admin = this.state.data.adminActivity;
+      
+      const adminList = document.getElementById('admin-camera-list');
+      if (adminList) {
+        if (admin.adminsInCamera && admin.adminsInCamera.length > 0) {
+          // Time-bound filtering for disconnected admins (2 minute grace period)
+          const now = Date.now();
+          const activeAdmins = admin.adminsInCamera.filter(a => {
+            if (!a.disconnected) return true;
+            // if they were marked disconnected but it's old, show them as active again
+            const dt = a.disconnectTime ? (now - a.disconnectTime) : 0;
+            return dt > 120000; // 2 minutes "grace"
+          });
+          if (activeAdmins.length > 0) {
+            adminList.innerHTML = activeAdmins.map(admin => `
+              <div class="admin-entry">
+                <span class="admin-icon">🛡️</span>
+                <span class="admin-name">${admin.name || 'Unknown'}</span>
+              </div>
+            `).join('');
+          } else {
+            adminList.innerHTML = `
+              <div class="overlay-section admin-camera">
+                <span class="admin-icon">🛡️</span>
+                <span class="admin-name">No admins in camera</span>
+              </div>
+            `;
+          }
+        } else {
+          adminList.innerHTML = `
+            <div class="admin-entry">
+              <span class="admin-icon">🛡️</span>
+              <span class="admin-name">No admins in camera</span>
+            </div>
+          `;
+        }
+      }
+    }
+
+    // Update last alert section
+    if (this.state.data.adminActivity?.lastAdminCommand) {
+      const command = this.state.data.adminActivity.lastAdminCommand;
+      const timeAgo = this.getTimeAgo(command.timestamp);
+      
+      // Check if this is a new alert (not already in history)
+      const isNewAlert = !this.state.alertHistory.some(alert => 
+        alert.timestamp === command.timestamp && 
+        alert.admin?.eosID === command.admin?.eosID
+      );
+      
+      if (isNewAlert) {
+        // Add to alert history
+        this.addToAlertHistory(command);
+        
+        // Play sound and flash for new alerts
+        this.playAdminAlertSound();
+        this.flashAlertSection();
+      }
+      
+      this.updateElement('alert-player', command.admin?.name || 'Unknown');
+      this.updateElement('alert-time', timeAgo);
+      
+      // Show the alert message if available
+      const alertMessage = document.getElementById('alert-message');
+      if (alertMessage && command.message) {
+        alertMessage.textContent = `"${command.message}"`;
+        alertMessage.style.display = 'block';
+      } else if (alertMessage) {
+        alertMessage.style.display = 'none';
+      }
+      
+      // Update alert history display
+      this.updateAlertHistoryDisplay();
+    } else {
+      this.updateElement('alert-player', 'No alerts');
+      this.updateElement('alert-time', '');
+      const alertMessage = document.getElementById('alert-message');
+      if (alertMessage) alertMessage.style.display = 'none';
+      
+      // Hide alert history if no alerts
+      const alertHistory = document.getElementById('alert-history');
+      if (alertHistory) alertHistory.style.display = 'none';
+    }
+
+
+
+    // Update API status section - don't overwrite the display text set by setStatus
+    // this.updateElement('connection-status', this.state.connectionStatus);
+    
+    // Update connection mode indicator
+    const connectionMode = this.getConnectionModeDisplay();
+    this.updateElement('polling-mode', connectionMode);
+    
+    // Apply connection mode styling
+    const connectionModeElement = document.getElementById('polling-mode');
+    if (connectionModeElement) {
+      connectionModeElement.className = 'connection-value';
+      if (this.state.connectionStatus === 'connected') {
+        connectionModeElement.classList.add('websocket-connected');
+      } else if (this.state.connectionStatus === 'error') {
+        connectionModeElement.classList.add('websocket-error');
+      } else {
+        connectionModeElement.classList.add('websocket-connecting');
+      }
+    }
+
+    // Update visual indicators
+    this.updateConnectionIndicator();
+    
+
+  },
+
+  // Update a specific element
+  updateElement(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = value;
+    }
+  },
+
+  // Set connection status
+  setStatus(status) {
+    this.state.connectionStatus = status;
+    
+    // Map status to display text
+    let displayText = status;
+    if (status === 'connected') {
+      displayText = 'Connected';
+    } else if (status === 'connecting') {
+      displayText = 'Connecting...';
+    } else if (status === 'error') {
+      displayText = 'Connection Error';
+    } else if (status === 'auth_failed') {
+      displayText = 'Login Required';
+    } else if (status === 'stale') {
+      displayText = 'Stale Connection';
+    } else if (status === 'disconnected') {
+      displayText = 'Disconnected';
+    } else if (status === 'Login required') {
+      displayText = 'Login Required';
+    } else if (status === 'Authentication expired, please login again') {
+      displayText = 'Session Expired';
+    } else if (status === 'Logged out') {
+      displayText = 'Logged Out';
+    }
+    
+    this.updateElement('connection-status', displayText);
+    this.updateConnectionIndicator();
+  },
+
+  // Get time ago string
+  getTimeAgo(timestamp) {
+    if (!timestamp) return 'Never';
+    
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    
+    if (seconds < 60) return `${seconds}s ago`;
+    if (minutes < 60) return `${minutes}m ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  },
+  
+  // NEW: Add command to alert history
+  addToAlertHistory(command) {
+    // Add to beginning of array (most recent first)
+    this.state.alertHistory.unshift({
+      ...command,
+      id: Date.now() + Math.random(), // Unique ID for each alert
+      addedAt: Date.now() // Track when this alert was added
+    });
+    
+    // Keep only the most recent alerts
+    if (this.state.alertHistory.length > CONFIG.alertConfig.maxAlertHistory) {
+      this.state.alertHistory = this.state.alertHistory.slice(0, CONFIG.alertConfig.maxAlertHistory);
+    }
+    
+
+  },
+  
+  // NEW: Update alert history display
+  updateAlertHistoryDisplay() {
+    const alertHistory = document.getElementById('alert-history');
+    const alertHistoryItems = document.getElementById('alert-history-items');
+    const historyCount = document.getElementById('history-count');
+    const dropdownArrow = document.getElementById('alert-dropdown-arrow');
+    
+    if (!alertHistory || !alertHistoryItems || !historyCount || !dropdownArrow) return;
+    
+    // Clean up expired alerts first (20 minutes)
+    this.cleanupExpiredAlerts();
+    
+    if (this.state.alertHistory.length === 0) {
+      alertHistory.style.display = 'none';
+      dropdownArrow.style.display = 'none';
+      return;
+    }
+    
+    // Show dropdown arrow if there are alerts
+    dropdownArrow.style.display = 'inline-block';
+    
+    // Update history count
+    historyCount.textContent = `(${this.state.alertHistory.length})`;
+    
+    // Build history HTML (show all alerts in history)
+    const historyItems = this.state.alertHistory.map(alert => `
+      <div class="alert-history-item">
+        <div class="alert-history-header">
+          <span class="alert-history-player">${alert.admin?.name || 'Unknown'}</span>
+          <span class="alert-history-time">${this.getTimeAgo(alert.timestamp)}</span>
+        </div>
+        <div class="alert-history-message">"${alert.message || 'No message'}"</div>
+      </div>
+    `).join('');
+    
+    alertHistoryItems.innerHTML = historyItems;
+  },
+  
+  // NEW: Flash the alert section
+  flashAlertSection() {
+    const alertSection = document.querySelector('.last-alert');
+    if (!alertSection) return;
+    
+    // Remove existing flash class
+    alertSection.classList.remove('alert-flash');
+    
+    // Add flash class to trigger animation
+    setTimeout(() => {
+      alertSection.classList.add('alert-flash');
+    }, 10);
+    
+    // Remove flash class after animation completes
+    setTimeout(() => {
+      alertSection.classList.remove('alert-flash');
+    }, CONFIG.alertConfig.flashDuration);
+  },
+  
+  // NEW: Clean up expired alerts (20 minutes)
+  cleanupExpiredAlerts() {
+    const now = Date.now();
+    const expiryTime = 20 * 60 * 1000; // 20 minutes in milliseconds
+    
+    // Filter out expired alerts - ONLY use addedAt for expiration logic
+    const beforeCleanup = this.state.alertHistory.length;
+    this.state.alertHistory = this.state.alertHistory.filter(alert => {
+      // Only use addedAt for expiration - this is when the alert was added to the overlay
+      if (!alert.addedAt) {
+        return false; // Remove alerts without addedAt (old alerts from before fix)
+      }
+      
+      const timeSinceAdded = now - alert.addedAt;
+      const isExpired = timeSinceAdded >= expiryTime;
+      
+      return !isExpired;
+    });
+    const afterCleanup = this.state.alertHistory.length;
+    
+    // Update the display after cleanup if any alerts were removed
+    if (beforeCleanup > afterCleanup) {
+      this.updateAlertHistoryDisplay();
+    }
+  },
+  
+  // NEW: Setup periodic cleanup every 5 minutes
+  setupPeriodicCleanup() {
+    setInterval(() => {
+      this.cleanupExpiredAlerts();
+    }, 5 * 60 * 1000); // Every 5 minutes
+    
+    // Also run cleanup every minute for more responsive expiration
+    setInterval(() => {
+      this.cleanupExpiredAlerts();
+    }, 60 * 1000); // Every minute
+    
+
+  },
+
+  // NEW: Setup periodic token refresh to prevent expiration
+  setupPeriodicTokenRefresh() {
+    // Refresh token every 30 minutes (well before 2-hour expiration)
+    setInterval(async () => {
+      try {
+        if (this.state.isConnected) {
+          console.log('[DMH] Periodic token refresh check...');
+          const ok = await DMH_AUTH.ensureLogin();
+          if (!ok) {
+            console.warn('[DMH] Periodic refresh failed, will retry on next connection attempt');
+          } else {
+            console.log('[DMH] Periodic token refresh successful');
+          }
+        }
+      } catch (error) {
+        console.error('[DMH] Periodic token refresh error:', error);
+      }
+    }, 30 * 60 * 1000); // 30 minutes
+  },
+
+  // NEW: Setup periodic authentication check
+  setupPeriodicAuthCheck() {
+    // Check authentication status every 5 minutes
+    setInterval(async () => {
+      try {
+        if (this.state.isConnected && this.state.connectionStatus === 'connected') {
+          // Only check if we think we're connected
+          const ok = await DMH_AUTH.ensureLogin();
+          if (!ok) {
+            console.log('[DMH] Periodic auth check failed, connection may be stale');
+            // Don't immediately disconnect, but mark for reconnection on next operation
+            this.state.connectionStatus = 'stale';
+          }
+        }
+      } catch (error) {
+        console.error('[DMH] Periodic auth check error:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+  },
+
+  // NEW: Setup stale connection check and recovery
+  setupStaleConnectionCheck() {
+    // Check for stale connections every 2 minutes and reconnect if needed
+    setInterval(async () => {
+      try {
+        if (this.state.connectionStatus === 'stale') {
+          console.log('[DMH] Detected stale connection, attempting recovery...');
+          this.state.connectionStatus = 'connecting';
+          this.setStatus('Reconnecting stale connection...');
+          this.startWebSocketConnection();
+        }
+      } catch (error) {
+        console.error('[DMH] Stale connection recovery error:', error);
+      }
+    }, 2 * 60 * 1000); // 2 minutes
+  },
+
+  // NEW: Handle authentication success and reset connection status
+  handleAuthSuccess() {
+    this.state.connectionStatus = 'connecting';
+    this.state.isConnected = false;
+    this.setStatus('Authentication successful, connecting...');
+    this.updateOverlay();
+  },
+
+  // NEW: Handle authentication failure and set appropriate status
+  handleAuthFailure(reason = 'Authentication failed') {
+    this.state.connectionStatus = 'auth_failed';
+    this.state.isConnected = false;
+    this.setStatus(reason);
+    this.updateOverlay();
+  },
+
+  // NEW: Ensure authentication before API calls
+  async ensureAuthBeforeCall() {
+    // Check if we have valid authentication
+    if (!DMH_AUTH.isValid()) {
+      // Try to refresh the token
+      const authOk = await DMH_AUTH.ensureLogin();
+      if (!authOk) {
+        throw new Error('Authentication required');
+      }
+    }
+    
+    // Return the bearer token for the API call
+    return DMH_AUTH.bearer();
+  },
+
+  // NEW: Check if user is currently authenticated
+  isAuthenticated() {
+    return DMH_AUTH.isValid();
+  },
+
+  // NEW: Handle logout and clear stored tokens
+  async logout() {
+    // Clear tokens from server if we have a refresh token
+    if (DMH_AUTH.refreshToken) {
+      try {
+        await fetch(`${DMH_AUTH.workerOrigin}/session/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            refresh_token: DMH_AUTH.refreshToken
+          })
+        });
+      } catch (error) {
+        console.error('[DMH] Server logout failed:', error);
+      }
+    }
+    
+    // Clear local tokens
+    DMH_AUTH.clearTokens();
+    this.state.connectionStatus = 'auth_failed';
+    this.state.isConnected = false;
+    this.setStatus('Logged out');
+    this.updateOverlay();
+  },
+
+  // Update connection indicator
+  updateConnectionIndicator() {
+    const overlay = document.getElementById('dmh-cloudflare-overlay');
+    if (!overlay) return;
+
+    overlay.className = `dmh-overlay connection-${this.state.connectionStatus}`;
+    
+    // Update status colors
+    const statusElement = document.getElementById('connection-status');
+    if (statusElement) {
+      statusElement.className = `connection-value status-${this.state.connectionStatus}`;
+    }
+  },
+
+  
+
+  // Test basic connectivity to Cloudflare Worker
+  async testConnectivity() {
+    try {
+  
+      const response = await fetch(`${CONFIG.cloudflare.workerBaseUrl}/api/status`);
+      if (response.ok) {
+
+      } else {
+        console.warn('⚠️ Basic connectivity test failed:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('❌ Basic connectivity test failed:', error.message);
+    }
+  },
+   
+   // Cleanup on unmount
+   cleanup() {
+     this.stopAllUpdates();
+     Utils.removeElement('dmh-cloudflare-overlay');
+ 
+   },
+
+  // NEW: Start WebSocket connection for real-time updates (SECURE PROXY APPROACH)
+  async startWebSocketConnection() {
+    const serverId = CONFIG.cloudflare.serverId;
+    if (!serverId) {
+      this.setStatus("Open a BattleMetrics server page");
+      console.warn("No server ID available for WebSocket connection");
+      return; // don't call overview/ws-token without a server id
+    }
+
+    // === SECURE WS client for overlay ================================================
+    const SERVER_ID = CONFIG.cloudflare.serverId;
+    let ws, reconnectTimer, gotInitial = false;
+
+    // Mint a single-use WS token (requires session auth)
+    const getWebSocketToken = async () => {
+      // Ensure we have (or refresh) a valid session
+      const bearer = await this.ensureAuthBeforeCall();
+      if (!bearer) {
+        // Signal to caller that user action is required
+        const err = new Error('LOGIN_REQUIRED');
+        err.code = 'LOGIN_REQUIRED';
+        throw err;
+      }
+
+      const tokenUrl = `${CONFIG.cloudflare.workerBaseUrl}${CONFIG.cloudflare.endpoints.wsToken}?server=${serverId}`;
+      const resp = await fetch(tokenUrl, {
+        method: "POST",
+        headers: { "Authorization": bearer }
+      });
+      if (!resp.ok) throw new Error(`WS token mint failed: ${resp.status}`);
+      const { websocketUrl } = await resp.json();
+      return websocketUrl;
+    };
+
+    // 1. optional 1.5s fallback: one-time GET if snapshot didn't arrive yet
+    const initialFallback = setTimeout(async () => {
+      if (!gotInitial) {
+        try {
+          // Ensure we have a valid session before fetching overview
+          const bearer = await this.ensureAuthBeforeCall();
+          if (!bearer) {
+            console.warn('⚠️ Authentication failed for initial fallback - user needs to login');
+            this.handleAuthFailure('Login required');
+            return;
+          }
+          
+          const ov = await fetch(`${CONFIG.cloudflare.workerBaseUrl}/api/overview?server=${serverId}`, {
+            headers: { 
+              "Authorization": bearer
+            }
+          }).then(r => {
+            if (!r.ok) throw new Error(`Overview failed: ${r.status}`);
+            return r.json();
+          });
+          if (ov && !ov.error) {
+            gotInitial = true;
+            this.handleSnapshotData(ov);
+          }
+        } catch (e) { 
+          console.warn('⚠️ Initial fallback failed:', e); 
+        }
+      }
+    }, 1500);
+
+    const connectWS = async () => {
+      try { ws?.close(); } catch {}
+      
+      try {
+        // SECURITY: Get fresh WebSocket URL with session token
+        const WS_URL = await getWebSocketToken();
+        ws = new WebSocket(WS_URL);
+      } catch (error) {
+        if (error?.code === 'LOGIN_REQUIRED' || error?.message === 'LOGIN_REQUIRED') {
+          this.handleAuthFailure('Login required');
+          return; // do not auto-retry; wait for user to click login
+        }
+        console.error('❌ Failed to establish WebSocket connection:', error);
+        this.state.connectionStatus = 'error';
+        this.updateOverlay();
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        this.state.connectionStatus = 'connected';
+        this.state.isConnected = true;
+        this.state.retryCount = 0;
+        this.setStatus('connected'); // This will be mapped to "Connected" by setStatus
+        this.updateOverlay();
+      };
+
+      ws.onmessage = (e) => {
+        if (e.data === "ping") { 
+          try { ws.send("pong"); } catch {} 
+          return; 
+        }
+
+        let msg;
+        try { 
+          msg = JSON.parse(e.data); 
+        } catch { 
+          console.warn('Failed to parse WebSocket message:', e.data);
+          return; 
+        }
+
+        if (msg.type === "snapshot") {
+          gotInitial = true; 
+          clearTimeout(initialFallback);
+          this.handleSnapshotData(msg.payload);
+          return;
+        }
+        
+        if (msg.type === "replay" && Array.isArray(msg.events)) {
+          gotInitial = true; 
+          clearTimeout(initialFallback);
+          for (const ev of msg.events) {
+            this.handleDeltaUpdate(ev);
+          }
+          return;
+        }
+        
+        if (msg.type === "auth_error" || msg.type === "token_expired") {
+          console.warn('[DMH] WebSocket authentication error, re-authenticating...');
+          this.handleAuthFailure('Authentication expired, please login again');
+          try { ws.close(); } catch {}
+          return;
+        }
+        
+        this.handleDeltaUpdate(msg);
+      };
+
+      ws.onclose = (event) => {
+        console.log('[DMH] WebSocket closed:', event.code, event.reason);
+        this.state.connectionStatus = 'disconnected';
+        this.updateOverlay();
+        
+        // Don't auto-reconnect if it was an authentication failure
+        if (event.code === 1008 || event.code === 1003) { // Policy violation or forbidden
+          console.log('[DMH] WebSocket closed due to authentication/policy issue, not auto-reconnecting');
+          this.handleAuthFailure('Authentication required');
+          return;
+        }
+        
+        scheduleReconnect();
+      };
+      
+      ws.onerror = (error) => {
+        console.warn('🔌 WebSocket error:', error);
+        this.state.connectionStatus = 'error';
+        this.updateOverlay();
+        try { ws.close(); } catch {}
+      };
+    };
+
+    const scheduleReconnect = () => {
+      clearTimeout(reconnectTimer);
+      this.state.retryCount++;
+      const delay = Math.min(2000 * Math.pow(1.5, this.state.retryCount), 30000); // Max 30s
+
+      // Don't auto-reconnect if we have authentication issues
+      if (this.state.connectionStatus === 'auth_failed') {
+        console.log('[DMH] Skipping auto-reconnect due to authentication failure');
+        return;
+      }
+
+      reconnectTimer = setTimeout(() => connectWS(), delay);
+    };
+
+    // Store WebSocket reference for cleanup
+    this.ws = ws;
+    this.reconnectTimer = reconnectTimer;
+    
+    connectWS();
+    // ========================================================================
+  },
+
+  // Handle snapshot data (initial load)
+  handleSnapshotData(snapshot) {
+    // Update our state with the snapshot
+    if (snapshot.adminActivity) {
+      this.state.data.adminActivity = snapshot.adminActivity;
+      
+      // NEW: Initialize alert history from snapshot if available
+      if (snapshot.adminActivity.lastAdminCommand && this.state.alertHistory.length === 0) {
+        this.addToAlertHistory(snapshot.adminActivity.lastAdminCommand);
+      }
+    }
+    
+    // Mark that we have snapshot data (but don't claim "connected" yet)
+    this.state.hasSnapshotData = true;
+    this.state.lastUpdate = Date.now();
+    
+    // Update the overlay
+    this.updateOverlay();
+  },
+
+  // Handle delta updates (incremental changes)
+  handleDeltaUpdate(delta) {
+    // Apply delta based on kind
+    switch (delta?.kind) {
+      case "admin_activity":
+        if (delta.payload) {
+          this.state.data.adminActivity = { ...this.state.data.adminActivity, ...delta.payload };
+          this.updateCameraDisplay(); // Fast update for admin camera
+        }
+        break;
+        
+      case "overview":
+        if (delta.payload) {
+          // Full overview update
+          this.handleSnapshotData(delta.payload);
+        }
+        break;
+    }
+    
+    // Update last update time
+    this.state.lastUpdate = Date.now();
+  },
+
+  // Stop all update mechanisms
+  stopAllUpdates() {
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {
+        console.warn('Error closing WebSocket:', e);
+      }
+      this.ws = null;
+    }
+    
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    
+
+  },
+
+  // Update only camera display for instant updates
+  updateCameraDisplay() {
+    const cameraList = document.getElementById('admin-camera-list');
+    if (!cameraList) return;
+    
+    const admins = this.state.data.adminActivity?.adminsInCamera || [];
+    
+    if (admins.length === 0) {
+      cameraList.innerHTML = `
+        <div class="admin-entry">
+          <span class="admin-icon">🛡️</span>
+          <span class="admin-name">No admins in camera</span>
+        </div>
+      `;
+    } else {
+      // Time-bound filtering for disconnected admins (2 minute grace period)
+      const now = Date.now();
+      const activeAdmins = admins.filter(a => {
+        if (!a.disconnected) return true;
+        // if they were marked disconnected but it's old, show them as active again
+        const dt = a.disconnectTime ? (now - a.disconnectTime) : 0;
+        return dt > 120000; // 2 minutes "grace"
+      });
+      
+      if (activeAdmins.length > 0) {
+        cameraList.innerHTML = activeAdmins.map(admin => `
+          <div class="admin-entry">
+            <span class="admin-icon">📹</span>
+            <span class="admin-name">${admin.name || 'Unknown'}</span>
+          </div>
+        `).join('');
+      } else {
+        cameraList.innerHTML = `
+          <div class="admin-entry">
+            <span class="admin-icon">🛡️</span>
+            <span class="admin-name">No admins in camera</span>
+          </div>
+        `;
+      }
+    }
+  },
+
+  // NEW: Get connection mode display text
+  getConnectionModeDisplay() {
+    switch (this.state.connectionStatus) {
+      case 'connected':
+        return 'WebSocket - Realtime';
+      case 'connecting':
+        return 'WebSocket - Connecting...';
+      case 'error':
+        return 'WebSocket - Error';
+      case 'disconnected':
+        if (this.state.hasSnapshotData) {
+          return 'HTTP snapshot (not live)';
+        }
+        return 'WebSocket - Disconnected';
+      case 'auth_failed':
+        return 'Authentication Required';
+      case 'stale':
+        return 'WebSocket - Stale';
+      default:
+        return 'WebSocket - Connecting...';
+    }
+  },
+
+  // Clear alert history
+  clearAlertHistory() {
+    this.state.alertHistory = [];
+    this.updateAlertHistoryDisplay();
+  },
+
+  // NEW: Toggle alert history dropdown
+  toggleAlertHistory() {
+    const alertHistory = document.getElementById('alert-history');
+    const dropdownArrow = document.getElementById('alert-dropdown-arrow');
+    
+    if (!alertHistory || !dropdownArrow) return;
+    
+    const isVisible = alertHistory.style.display !== 'none';
+    
+    if (isVisible) {
+      // Hide history
+      alertHistory.style.display = 'none';
+      dropdownArrow.textContent = '▼';
+      dropdownArrow.title = 'Show Alert History';
+    } else {
+      // Show history
+      alertHistory.style.display = 'block';
+      dropdownArrow.textContent = '▲';
+      dropdownArrow.title = 'Hide Alert History';
     }
   }
 };
@@ -1491,20 +3713,18 @@ class BMOverlay {
   
   async init(){
     if(this.isInitialized) return;
-    console.log("Initializing BattleMetrics Overlay Enhanced...");
 
     StyleManager.init();
-    UIComponents.createCornerButtons();
     RouterWatch.init();
+
+    // NEW: Initialize Cloudflare integration
+    CloudflareIntegration.init();
 
     this.startUpdateLoop();
     this.isInitialized=true;
     
     // NEW: Setup global debugging utilities
     this.setupGlobalUtilities();
-    
-    console.log("BattleMetrics Overlay Enhanced initialized successfully");
-    console.log("Debug commands available: Utils.debugCacheStatus(), Utils.forceRefreshAllStyling(), Utils.clearAllCaches()");
   }
   
   startUpdateLoop(){
@@ -1533,6 +3753,22 @@ class BMOverlay {
         elementCache: CBLPlayerListManager.elementCache.size,
         processedSteamIDs: CBLPlayerListManager.processedSteamIDs.size
       }),
+      // NEW: Status UI testing functions
+      testStatus: (status) => {
+        if (CloudflareIntegration.instance) {
+          CloudflareIntegration.instance.setStatus(status);
+        }
+      },
+      getStatus: () => {
+        if (CloudflareIntegration.instance) {
+          return {
+            connectionStatus: CloudflareIntegration.instance.state.connectionStatus,
+            isConnected: CloudflareIntegration.instance.state.isConnected,
+            isAuthenticated: CloudflareIntegration.instance.isAuthenticated()
+          };
+        }
+        return null;
+      },
       // NEW: Persistent storage utilities
       persistentStorage: {
         save: () => PersistentStorage.saveCache(),
@@ -1543,11 +3779,37 @@ class BMOverlay {
       },
       // NEW: Cache warming utilities
       warmCache: () => CBLPlayerListManager.warmCacheFromStorage(),
-      enableAggressive: () => CBLPlayerListManager.enableAggressiveCaching()
+      enableAggressive: () => CBLPlayerListManager.enableAggressiveCaching(),
+      // NEW: Cloudflare integration utilities
+      cloudflare: {
+        forceUpdate: () => CloudflareIntegration.forceUpdate(),
+        getStatus: () => CloudflareIntegration.state,
+        getData: () => CloudflareIntegration.state.data,
+        reconnectWS: () => CloudflareIntegration.startWebSocketConnection(),
+        // NEW: Debug alert history
+        testAlertHistory: () => {
+          const testCommand = {
+            admin: { name: 'TestPlayer', eosID: 'test' + Date.now() },
+            message: 'Test admin command ' + new Date().toLocaleTimeString(),
+            timestamp: Date.now()
+          };
+          CloudflareIntegration.addToAlertHistory(testCommand);
+          CloudflareIntegration.updateAlertHistoryDisplay();
+  
+        },
+        showAlertHistory: () => {
+
+          CloudflareIntegration.updateAlertHistoryDisplay();
+        },
+        forceCleanup: () => {
+
+          CloudflareIntegration.cleanupExpiredAlerts();
+        }
+      }
     };
     
-    console.log("Global debug utilities available: window.DMH_DEBUG");
-    console.log("Persistent storage utilities: window.DMH_DEBUG.persistentStorage");
+
+
   }
 }
 
