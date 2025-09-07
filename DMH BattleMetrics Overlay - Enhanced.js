@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay
 // @namespace https://www.battlemetrics.com/
-// @version 3.7
+// @version 3.8
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
@@ -324,7 +324,7 @@ const DMH_AUTH = {
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "3.7",
+  version: "3.8",
   updateRate: 1000, // Increased from 150ms to 1000ms (1 second) for better performance
   
   // NEW: Cloudflare Worker Integration
@@ -1151,6 +1151,31 @@ const StyleManager = {
       
       .connection-disconnected {
         border-color: rgba(255, 170, 0, 0.5) !important;
+      }
+      
+      .server-selector {
+        background: #2a2a2a;
+        color: white;
+        border: 1px solid #555;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        min-width: 180px;
+        max-width: 200px;
+      }
+      
+      .server-selector:focus {
+        outline: none;
+        border-color: #00fff7;
+        box-shadow: 0 0 0 2px rgba(0, 255, 247, 0.2);
+      }
+      
+      .server-selector option {
+        background: #2a2a2a;
+        color: white;
+        padding: 4px;
       }
       
       @media (max-width: 768px) {
@@ -2301,6 +2326,33 @@ const CloudflareIntegration = {
     }
   },
 
+  // NEW: Switch to a different server
+  async switchServer(newServerId) {
+    console.log(`🔄 Switching from ${CONFIG.cloudflare.serverId} to ${newServerId}`);
+    
+    // Stop all updates first to prevent any data mixing
+    this.stopAllUpdates();
+    
+    // Update server ID
+    CONFIG.cloudflare.serverId = newServerId;
+    
+    // Save selection to localStorage
+    localStorage.setItem('dmh-server-id-override', newServerId);
+    
+    // Update UI
+    this.setStatus("Switching servers...");
+    
+    // Clear current data but preserve alert history to prevent false alerts
+    this.state.data = { adminActivity: null };
+    // Don't clear alert history - let the new server data load naturally
+    this.updateAlertHistoryDisplay();
+    
+    // Wait a bit longer to ensure old connection is fully closed
+    setTimeout(() => {
+      this.startWebSocketConnection();
+    }, 1500);
+  },
+
   // Bulletproof server ID detection helper
   detectServerIdFromPage() {
     // URL like: https://www.battlemetrics.com/servers/squad/27157414
@@ -2468,6 +2520,21 @@ const CloudflareIntegration = {
     if (versionBtn) {
       versionBtn.addEventListener('click', () => {
         window.open("https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js", "_blank");
+      });
+    }
+
+    // Server selector dropdown
+    const serverSelector = overlay.querySelector('#server-selector');
+    if (serverSelector) {
+      // Set current selection based on saved preference
+      const savedServerId = localStorage.getItem('dmh-server-id-override') || CONFIG.cloudflare.serverId || '27157414';
+      serverSelector.value = savedServerId;
+      
+      serverSelector.addEventListener('change', async (e) => {
+        const newServerId = e.target.value;
+        if (newServerId !== CONFIG.cloudflare.serverId) {
+          await this.switchServer(newServerId);
+        }
       });
     }
   },
@@ -2640,7 +2707,7 @@ const CloudflareIntegration = {
             </button>
             <button class="quick-link-btn version-btn" id="version-btn" title="Script Version">
               <span class="version-icon">⚡</span>
-              <span class="btn-text">3.7</span>
+              <span class="btn-text">3.8</span>
             </button>
           </div>
         </div>
@@ -2648,6 +2715,14 @@ const CloudflareIntegration = {
         <div class="overlay-section api-status">
           <h4><span class="section-icon">📡</span>API Status</h4>
           <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">Server:</span>
+              <select id="server-selector" class="server-selector">
+                <option value="27157414">Server 1 (New Player Friendly)</option>
+                <option value="29621932">Server 2 (Global Escalation)</option>
+              </select>
+            </div>
+            
             <div class="info-item">
               <span class="info-label">Status:</span>
               <span class="info-value" id="connection-status">Connecting...</span>
@@ -2786,7 +2861,8 @@ const CloudflareIntegration = {
          <h3 style="color: #00fff7; margin: 0 0 15px 0;">DMH Overlay Debug Info</h3>
          <div style="margin-bottom: 10px; color: white;">
            <strong>Current URL:</strong> ${location.href}<br>
-           <strong>Detected Server ID:</strong> ${CONFIG.cloudflare.serverId || 'None'}<br>
+           <strong>Selected Server:</strong> ${CONFIG.cloudflare.serverId || 'None'}<br>
+           <strong>Server Name:</strong> ${CONFIG.cloudflare.serverId === '27157414' ? 'New Player Friendly' : CONFIG.cloudflare.serverId === '29621932' ? 'Global Escalation' : 'Unknown'}<br>
            <strong>Worker URL:</strong> ${CONFIG.cloudflare.workerBaseUrl}<br>
            <strong>Connection Status:</strong> ${this.state.connectionStatus}<br>
            <strong>Last Update:</strong> ${this.state.lastUpdate ? new Date(this.state.lastUpdate).toLocaleTimeString() : 'Never'}<br>
@@ -3385,6 +3461,9 @@ const CloudflareIntegration = {
     // === SECURE WS client for overlay ================================================
     const SERVER_ID = CONFIG.cloudflare.serverId;
     let ws, reconnectTimer, gotInitial = false;
+    
+    // Store WebSocket connection reference for server switching
+    this.wsConnection = null;
 
     // Mint a single-use WS token (requires session auth)
     const getWebSocketToken = async () => {
@@ -3444,6 +3523,9 @@ const CloudflareIntegration = {
         // SECURITY: Get fresh WebSocket URL with session token
         const WS_URL = await getWebSocketToken();
         ws = new WebSocket(WS_URL);
+        
+        // Store connection reference for server switching
+        this.wsConnection = ws;
       } catch (error) {
         if (error?.code === 'LOGIN_REQUIRED' || error?.message === 'LOGIN_REQUIRED') {
           this.handleAuthFailure('Login required');
@@ -3601,6 +3683,15 @@ const CloudflareIntegration = {
         console.warn('Error closing WebSocket:', e);
       }
       this.ws = null;
+    }
+    
+    if (this.wsConnection) {
+      try {
+        this.wsConnection.close();
+      } catch (e) {
+        console.warn('Error closing WebSocket connection:', e);
+      }
+      this.wsConnection = null;
     }
     
     if (this.reconnectTimer) {
