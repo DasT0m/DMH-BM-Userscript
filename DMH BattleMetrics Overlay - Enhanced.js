@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name DMH BattleMetrics Overlay
 // @namespace https://www.battlemetrics.com/
-// @version 3.8
+// @version 3.9
 // @updateURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @downloadURL https://raw.githubusercontent.com/DasT0m/DMH-BM-Userscript/refs/heads/main/DMH%20BattleMetrics%20Overlay%20-%20Enhanced.js
 // @description Modifies the rcon panel for battlemetrics to help color code important events and details about players. Enhanced with CBL player list coloring & virtualization-safe styling, plus admin coloring.
@@ -324,7 +324,7 @@ const DMH_AUTH = {
 // CONFIGURATION
 // ========================================
 const CONFIG = {
-  version: "3.8",
+  version: "3.9",
   updateRate: 1000, // Increased from 150ms to 1000ms (1 second) for better performance
   
   // NEW: Cloudflare Worker Integration
@@ -2707,7 +2707,7 @@ const CloudflareIntegration = {
             </button>
             <button class="quick-link-btn version-btn" id="version-btn" title="Script Version">
               <span class="version-icon">⚡</span>
-              <span class="btn-text">3.8</span>
+              <span class="btn-text">3.9</span>
             </button>
           </div>
         </div>
@@ -3461,9 +3461,11 @@ const CloudflareIntegration = {
     // === SECURE WS client for overlay ================================================
     const SERVER_ID = CONFIG.cloudflare.serverId;
     let ws, reconnectTimer, gotInitial = false;
+    // Generation guard: increment per connection attempt to ignore stale events
+    if (!this._wsGeneration) this._wsGeneration = 0;
+    const myGen = ++this._wsGeneration;
     
-    // Store WebSocket connection reference for server switching
-    this.wsConnection = null;
+    // Don't reset wsConnection here - let stopAllUpdates() handle cleanup
 
     // Mint a single-use WS token (requires session auth)
     const getWebSocketToken = async () => {
@@ -3487,7 +3489,9 @@ const CloudflareIntegration = {
     };
 
     // 1. optional 1.5s fallback: one-time GET if snapshot didn't arrive yet
+    this.initialFallbackTimer && clearTimeout(this.initialFallbackTimer);
     const initialFallback = setTimeout(async () => {
+      if (myGen !== this._wsGeneration) return; // stale
       if (!gotInitial) {
         try {
           // Ensure we have a valid session before fetching overview
@@ -3508,13 +3512,14 @@ const CloudflareIntegration = {
           });
           if (ov && !ov.error) {
             gotInitial = true;
-            this.handleSnapshotData(ov);
+            if (myGen === this._wsGeneration) this.handleSnapshotData(ov);
           }
         } catch (e) { 
           console.warn('⚠️ Initial fallback failed:', e); 
         }
       }
     }, 1500);
+    this.initialFallbackTimer = initialFallback;
 
     const connectWS = async () => {
       try { ws?.close(); } catch {}
@@ -3524,8 +3529,9 @@ const CloudflareIntegration = {
         const WS_URL = await getWebSocketToken();
         ws = new WebSocket(WS_URL);
         
-        // Store connection reference for server switching
+        // Store connection references immediately for proper cleanup
         this.wsConnection = ws;
+        this.ws = ws;
       } catch (error) {
         if (error?.code === 'LOGIN_REQUIRED' || error?.message === 'LOGIN_REQUIRED') {
           this.handleAuthFailure('Login required');
@@ -3547,6 +3553,7 @@ const CloudflareIntegration = {
       };
 
       ws.onmessage = (e) => {
+        if (myGen !== this._wsGeneration) return; // ignore stale
         if (e.data === "ping") { 
           try { ws.send("pong"); } catch {} 
           return; 
@@ -3563,7 +3570,7 @@ const CloudflareIntegration = {
         if (msg.type === "snapshot") {
           gotInitial = true; 
           clearTimeout(initialFallback);
-          this.handleSnapshotData(msg.payload);
+          if (myGen === this._wsGeneration) this.handleSnapshotData(msg.payload);
           return;
         }
         
@@ -3571,7 +3578,7 @@ const CloudflareIntegration = {
           gotInitial = true; 
           clearTimeout(initialFallback);
           for (const ev of msg.events) {
-            this.handleDeltaUpdate(ev);
+            if (myGen === this._wsGeneration) this.handleDeltaUpdate(ev);
           }
           return;
         }
@@ -3583,10 +3590,11 @@ const CloudflareIntegration = {
           return;
         }
         
-        this.handleDeltaUpdate(msg);
+        if (myGen === this._wsGeneration) this.handleDeltaUpdate(msg);
       };
 
       ws.onclose = (event) => {
+        if (myGen !== this._wsGeneration) return; // stale
         console.log('[DMH] WebSocket closed:', event.code, event.reason);
         this.state.connectionStatus = 'disconnected';
         this.updateOverlay();
@@ -3602,6 +3610,7 @@ const CloudflareIntegration = {
       };
       
       ws.onerror = (error) => {
+        if (myGen !== this._wsGeneration) return; // stale
         console.warn('🔌 WebSocket error:', error);
         this.state.connectionStatus = 'error';
         this.updateOverlay();
@@ -3623,8 +3632,7 @@ const CloudflareIntegration = {
       reconnectTimer = setTimeout(() => connectWS(), delay);
     };
 
-    // Store WebSocket reference for cleanup
-    this.ws = ws;
+    // Store reconnect timer reference for cleanup
     this.reconnectTimer = reconnectTimer;
     
     connectWS();
@@ -3697,6 +3705,11 @@ const CloudflareIntegration = {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+    
+    if (this.initialFallbackTimer) {
+      clearTimeout(this.initialFallbackTimer);
+      this.initialFallbackTimer = null;
     }
     
 
